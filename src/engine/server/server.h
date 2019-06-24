@@ -5,6 +5,7 @@
 
 #include <engine/server.h>
 #include <engine/shared/memheap.h>
+#include <vector>
 
 class CSnapIDPool
 {
@@ -79,6 +80,7 @@ public:
 		MAX_MAPLISTENTRY_SEND = 32,
 		MIN_MAPLIST_CLIENTVERSION=0x0703,	// todo 0.8: remove me
 		MAX_RCONCMD_RATIO=8,
+		MAP_DEFAULT_ID=0
 	};
 
 	struct CMapListEntry;
@@ -147,7 +149,7 @@ public:
 	CEcon m_Econ;
 	CServerBan m_ServerBan;
 
-	IEngineMap *m_pMap;
+	std::vector<IEngineMap*> m_vpMap;
 
 	int64 m_GameStartTime;
 	int m_RunServer;
@@ -163,12 +165,18 @@ public:
 	{
 		MAP_CHUNK_SIZE=NET_MAX_PAYLOAD-NET_MAX_CHUNKHEADERSIZE-4, // msg type
 	};
-	char m_aCurrentMap[64];
-	SHA256_DIGEST m_CurrentMapSha256;
-	unsigned m_CurrentMapCrc;
-	unsigned char *m_pCurrentMapData;
-	int m_CurrentMapSize;
-	int m_MapChunksPerRequest;
+
+	struct CMapData
+	{
+		char m_aCurrentMap[64];
+		SHA256_DIGEST m_CurrentMapSha256;
+		unsigned m_CurrentMapCrc;
+		unsigned char *m_pCurrentMapData;
+		int m_CurrentMapSize;
+		int m_MapChunksPerRequest;
+	};
+
+	std::vector<CMapData> m_vMapData;
 
 	//maplist
 	struct CMapListEntry
@@ -233,7 +241,7 @@ public:
 	static int NewClientCallback(int ClientID, void *pUser);
 	static int DelClientCallback(int ClientID, const char *pReason, void *pUser);
 
-	void SendMap(int ClientID);
+	void SendMap(int ClientID, int MapID);
 	void SendConnectionReady(int ClientID);
 	void SendRconLine(int ClientID, const char *pLine);
 	static void SendRconLineAuthed(const char *pLine, void *pUser, bool Highlighted);
@@ -245,14 +253,14 @@ public:
 	void SendMapListEntryRem(const CMapListEntry *pMapListEntry, int ClientID);
 	void UpdateClientMapListEntries();
 
-	void ProcessClientPacket(CNetChunk *pPacket);
+	void ProcessClientPacket(CNetChunk *pPacket, int MapID);
 
 	void SendServerInfo(int ClientID);
 	void GenerateServerInfo(CPacker *pPacker, int Token);
 
 	void PumpNetwork();
 
-	const char *GetMapName() const;
+	const char *GetMapName(int MapID) const;
 	int LoadMap(const char *pMapName);
 
 	void InitRegister(CNetServer *pNetServer, IEngineMasterServer *pMasterServer, IConsole *pConsole);
