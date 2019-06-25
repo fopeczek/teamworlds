@@ -5,6 +5,8 @@
 #include "kernel.h"
 #include "message.h"
 
+#include <engine/map.h>
+
 class IServer : public IInterface
 {
 	MACRO_INTERFACE("server", 0)
@@ -33,6 +35,8 @@ public:
 	virtual int GetClientInfo(int ClientID, CClientInfo *pInfo) const = 0;
 	virtual void GetClientAddr(int ClientID, char *pAddrStr, int Size) const = 0;
 	virtual int GetClientVersion(int ClientID) const = 0;
+
+	virtual IEngineMap* GetMap(int MapID) const = 0;
 
 	virtual int SendMsg(CMsgPacker *pMsg, int Flags, int ClientID) = 0;
 
@@ -76,6 +80,7 @@ class IGameServer : public IInterface
 protected:
 public:
 	virtual void OnInit() = 0;
+	virtual void OnInitMap(int MapID) = 0;
 	virtual void OnConsoleInit() = 0;
 	virtual void OnShutdown() = 0;
 
