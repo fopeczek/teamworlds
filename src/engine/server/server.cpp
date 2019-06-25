@@ -377,7 +377,6 @@ int CServer::Init()
 		m_aClients[i].m_Snapshots.Init();
 		m_aClients[i].m_MapID = MAP_DEFAULT_ID;
 		m_aClients[i].m_NextMapID = MAP_DEFAULT_ID;
-		m_aClients[i].m_OnMapChange = false;
 	}
 
 	m_CurrentGameTick = 0;
@@ -466,11 +465,6 @@ bool CServer::ClientIngame(int ClientID) const
 int CServer::ClientMapID(int ClientID) const
 {
 	return m_aClients[ClientID].m_MapID;
-}
-
-bool CServer::ClientOnMapChange(int ClientID) const
-{
-	return m_aClients[ClientID].m_OnMapChange;
 }
 
 int CServer::MaxClients() const
@@ -943,16 +937,8 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 
 				bool ConnectAsSpec = m_aClients[ClientID].m_State == CClient::STATE_CONNECTING_AS_SPEC;
 				m_aClients[ClientID].m_State = CClient::STATE_READY;
-				//if(!m_aClients[ClientID].m_OnMapChange)
 				GameServer()->OnClientConnected(ClientID, ConnectAsSpec);
 				SendConnectionReady(ClientID);
-				/*if(m_aClients[ClientID].m_OnMapChange)
-				{
-					m_aClients[ClientID].m_State = CClient::STATE_INGAME;
-					SendServerInfo(ClientID);
-					GameServer()->OnClientEnter(ClientID);
-					m_aClients[ClientID].m_OnMapChange = false;
-				}*/
 			}
 		}
 		else if(Msg == NETMSG_ENTERGAME)
@@ -1439,6 +1425,7 @@ int CServer::Run()
 				if(m_aClients[c].m_MapID != m_aClients[c].m_NextMapID || m_CurrentGameTick >= 0x6FFFFFFF) //	force reload to make sure the ticks stay within a valid range
 				{
 					ChangeClientMap(c);
+					m_aClients[c].m_MapID = m_aClients[c].m_NextMapID;
 				}
 			}
 
@@ -1551,9 +1538,7 @@ void CServer::ChangeClientMap(int ClientID)
 		if(m_aClients[ClientID].m_State <= CClient::STATE_AUTH)
 			return;
 
-		m_aClients[ClientID].m_OnMapChange = true;
 		SendMap(ClientID, m_aClients[ClientID].m_NextMapID);
-
 		m_aClients[ClientID].Reset();
 		m_aClients[ClientID].m_State = aSpecs[ClientID] ? CClient::STATE_CONNECTING_AS_SPEC : CClient::STATE_CONNECTING;
 
@@ -1562,11 +1547,7 @@ void CServer::ChangeClientMap(int ClientID)
 		//Kernel()->ReregisterInterface(GameServer());
 		//TODO createentities here
 		//GameServer()->OnInit();
-
-		GameServer()->OnInitMap(m_aClients[ClientID].m_MapID);
-		m_aClients[ClientID].m_MapID = m_aClients[ClientID].m_NextMapID;
-		m_aClients[ClientID].m_OnMapChange = false;
-		//GameServer()->OnClientDrop(ClientID, "");
+		GameServer()->OnInitMap(m_aClients[ClientID].m_NextMapID);
 	}
 	else
 	{
@@ -1718,10 +1699,7 @@ void CServer::ConSetMap(IConsole::IResult *pResult, void *pUser)
 		if(ClientID < 0 || ClientID >= MAX_CLIENTS || MapID < MAP_DEFAULT_ID)
 			return;
 
-		//pServer->GameServer()->OnClientDrop(ClientID, "");
-
 		pServer->m_aClients[ClientID].m_NextMapID = MapID;
-		//pServer->m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
 
 		char aBuf[64];
 		str_format(aBuf, sizeof(aBuf), "Reloaded Map with ID %d for client %d", MapID, ClientID);
@@ -1735,10 +1713,8 @@ void CServer::ConSetMap(IConsole::IResult *pResult, void *pUser)
 
 		for(int i = 0; i < MAX_CLIENTS; ++i)
 		{
-			if(pServer->m_aClients[i].m_State > CClient::STATE_AUTH) {
+			if(pServer->m_aClients[i].m_State > CClient::STATE_AUTH)
 				pServer->m_aClients[i].m_NextMapID = MapID;
-				//pServer->m_aClients[i].m_State = CClient::STATE_CONNECTING;
-			}
 		}
 		char aBuf[64];
 		str_format(aBuf, sizeof(aBuf), "Reloaded Map with ID %d for all clients", MapID);

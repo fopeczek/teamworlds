@@ -129,34 +129,30 @@ void CGameWorld::PostSnap()
 		}
 }
 
-void CGameWorld::Reset(int MapID)
+void CGameWorld::Reset()
 {
 	// reset all entities
 	for(int i = 0; i < NUM_ENTTYPES; i++)
 		for(CEntity *pEnt = m_apFirstEntityTypes[i]; pEnt; )
 		{
-			if(pEnt->GetMapID() != MapID)
-				continue;
 			m_pNextTraverseEntity = pEnt->m_pNextTypeEntity;
 			pEnt->Reset();
 			pEnt = m_pNextTraverseEntity;
 		}
-	RemoveEntities(MapID);
+	RemoveEntities();
 
-	GameServer()->m_pController(MapID)->OnReset();
-	RemoveEntities(MapID);
+	GameServer()->m_pController->OnReset();
+	RemoveEntities();
 
 	m_ResetRequested = false;
 }
 
-void CGameWorld::RemoveEntities(int MapID)
+void CGameWorld::RemoveEntities()
 {
 	// destroy objects marked for destruction
 	for(int i = 0; i < NUM_ENTTYPES; i++)
 		for(CEntity *pEnt = m_apFirstEntityTypes[i]; pEnt; )
 		{
-			if(pEnt->GetMapID() != MapID)
-				continue;
 			m_pNextTraverseEntity = pEnt->m_pNextTypeEntity;
 			if(pEnt->IsMarkedForDestroy())
 			{
@@ -170,10 +166,10 @@ void CGameWorld::RemoveEntities(int MapID)
 void CGameWorld::Tick()
 {
 	if(m_ResetRequested)
-		Reset(0);//TODO this will make trouble
+		Reset();
 
-	//if(!m_Paused)
-	//{
+	if(!m_Paused)
+	{
 		// update all objects
 		for(int i = 0; i < NUM_ENTTYPES; i++)
 			for(CEntity *pEnt = m_apFirstEntityTypes[i]; pEnt; )
@@ -190,7 +186,7 @@ void CGameWorld::Tick()
 				pEnt->TickDefered();
 				pEnt = m_pNextTraverseEntity;
 			}
-	/*}
+	}
 	else if(GameServer()->m_pController->IsGamePaused())
 	{
 		// update all objects
@@ -201,10 +197,9 @@ void CGameWorld::Tick()
 				pEnt->TickPaused();
 				pEnt = m_pNextTraverseEntity;
 			}
-	}*/
+	}
 
-	for(int i = 0; i < (int)GameServer()->m_vGameController.size(); ++i)
-		RemoveEntities(i);
+	RemoveEntities();
 }
 
 

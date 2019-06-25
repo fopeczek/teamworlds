@@ -140,7 +140,6 @@ public:
 
 		int m_MapID;
 		int m_NextMapID;
-		bool m_OnMapChange;
 	};
 
 	CClient m_aClients[MAX_CLIENTS];
@@ -239,7 +238,6 @@ public:
 	int ClientCountry(int ClientID) const;
 	bool ClientIngame(int ClientID) const;
 	int ClientMapID(int ClientID) const override;
-	bool ClientOnMapChange(int ClientID) const override;
 	int MaxClients() const;
 
 	virtual int SendMsg(CMsgPacker *pMsg, int Flags, int ClientID);

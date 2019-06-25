@@ -786,8 +786,8 @@ void IGameController::Tick()
 				if(m_MatchCount >= m_GameInfo.m_MatchNum-1)
 					CycleMap();
 
-				//if(g_Config.m_SvMatchSwap)
-					//GameServer()->SwapTeams();
+				if(g_Config.m_SvMatchSwap)
+					GameServer()->SwapTeams();
 				m_MatchCount++;
 				StartMatch();
 				break;

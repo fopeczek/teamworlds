@@ -84,9 +84,7 @@ public:
 	CEventHandler m_Events;
 	class CPlayer *m_apPlayers[MAX_CLIENTS];
 
-	std::vector<class IGameController*> m_vGameController;
-	IGameController* m_pController(int MapID) {return m_vGameController[MapID];}
-
+	class IGameController *m_pController;
 	CGameWorld m_World;
 
 	// helper functions
@@ -156,7 +154,7 @@ public:
 	void SendTuningParams(int ClientID);
 
 	//
-	void SwapTeams(int MapID);
+	void SwapTeams();
 
 	// engine events
 	virtual void OnInit();
