@@ -9,6 +9,8 @@
 #include <game/layers.h>
 #include <game/voting.h>
 
+#include <vector>
+
 #include "eventhandler.h"
 #include "gameworld.h"
 
@@ -37,8 +39,8 @@ class CGameContext : public IGameServer
 {
 	IServer *m_pServer;
 	class IConsole *m_pConsole;
-	CLayers m_Layers;
-	CCollision m_Collision;
+	std::vector<CLayers> m_vLayers;
+	std::vector<CCollision> m_vCollision;
 	CNetObjHandler m_NetObjHandler;
 	CTuningParams m_Tuning;
 
@@ -71,7 +73,7 @@ class CGameContext : public IGameServer
 public:
 	IServer *Server() const { return m_pServer; }
 	class IConsole *Console() { return m_pConsole; }
-	CCollision *Collision() { return &m_Collision; }
+	CCollision *Collision(int MapID) { return &(m_vCollision[MapID]); }
 	CTuningParams *Tuning() { return &m_Tuning; }
 
 	CGameContext();
@@ -128,7 +130,7 @@ public:
 
 	// helper functions
 	void CreateDamage(vec2 Pos, int Id, vec2 Source, int HealthAmount, int ArmorAmount, bool Self);
-	void CreateExplosion(vec2 Pos, int Owner, int Weapon, int MaxDamage);
+	void CreateExplosion(vec2 Pos, int Owner, int Weapon, int MaxDamage, int MapID);
 	void CreateHammerHit(vec2 Pos);
 	void CreatePlayerSpawn(vec2 Pos);
 	void CreateDeath(vec2 Pos, int Who);

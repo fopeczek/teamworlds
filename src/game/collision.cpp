@@ -53,6 +53,8 @@ void CCollision::Init(class CLayers *pLayers)
 
 int CCollision::GetTile(int x, int y) const
 {
+	if(m_pTiles == 0)
+		return 0;
 	int Nx = clamp(x/32, 0, m_Width-1);
 	int Ny = clamp(y/32, 0, m_Height-1);
 

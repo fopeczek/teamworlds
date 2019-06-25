@@ -6,8 +6,8 @@
 #include "character.h"
 #include "flag.h"
 
-CFlag::CFlag(CGameWorld *pGameWorld, int Team, vec2 StandPos)
-: CEntity(pGameWorld, CGameWorld::ENTTYPE_FLAG, StandPos, ms_PhysSize)
+CFlag::CFlag(CGameWorld *pGameWorld, int Team, vec2 StandPos, int MapID)
+: CEntity(pGameWorld, CGameWorld::ENTTYPE_FLAG, StandPos, MapID, ms_PhysSize)
 {
 	m_Team = Team;
 	m_StandPos = StandPos;
@@ -51,7 +51,7 @@ void CFlag::TickDefered()
 	else
 	{
 		// flag hits death-tile or left the game layer, reset it
-		if((GameServer()->Collision()->GetCollisionAt(m_Pos.x, m_Pos.y) & CCollision::COLFLAG_DEATH)
+		if((GameServer()->Collision(GetMapID())->GetCollisionAt(m_Pos.x, m_Pos.y) & CCollision::COLFLAG_DEATH)
 			|| GameLayerClipped(m_Pos))
 		{
 			Reset();
@@ -68,7 +68,7 @@ void CFlag::TickDefered()
 			else
 			{
 				m_Vel.y += GameServer()->m_World.m_Core.m_Tuning.m_Gravity;
-				GameServer()->Collision()->MoveBox(&m_Pos, &m_Vel, vec2(ms_PhysSize, ms_PhysSize), 0.5f);
+				GameServer()->Collision(GetMapID())->MoveBox(&m_Pos, &m_Vel, vec2(ms_PhysSize, ms_PhysSize), 0.5f);
 			}
 		}
 	}
@@ -83,6 +83,9 @@ void CFlag::TickPaused()
 
 void CFlag::Snap(int SnappingClient)
 {
+	if(GameServer()->Server()->ClientMapID(SnappingClient) != GetMapID())
+		return;
+
 	if(NetworkClipped(SnappingClient))
 		return;
 

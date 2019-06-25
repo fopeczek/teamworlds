@@ -7,8 +7,8 @@
 #include "character.h"
 #include "pickup.h"
 
-CPickup::CPickup(CGameWorld *pGameWorld, int Type, vec2 Pos)
-: CEntity(pGameWorld, CGameWorld::ENTTYPE_PICKUP, Pos, PickupPhysSize)
+CPickup::CPickup(CGameWorld *pGameWorld, int Type, vec2 Pos, int MapID)
+: CEntity(pGameWorld, CGameWorld::ENTTYPE_PICKUP, Pos, MapID, PickupPhysSize)
 {
 	m_Type = Type;
 
@@ -42,7 +42,7 @@ void CPickup::Tick()
 			return;
 	}
 	// Check if a player intersected us
-	CCharacter *pChr = (CCharacter *)GameServer()->m_World.ClosestEntity(m_Pos, 20.0f, CGameWorld::ENTTYPE_CHARACTER, 0);
+	CCharacter *pChr = (CCharacter *)GameServer()->m_World.ClosestEntity(m_Pos, 20.0f, CGameWorld::ENTTYPE_CHARACTER, 0, GetMapID());
 	if(pChr && pChr->IsAlive())
 	{
 		// player picked us up, is someone was hooking us, let them go
@@ -118,9 +118,9 @@ void CPickup::Tick()
 		if(Picked)
 		{
 			char aBuf[256];
-			str_format(aBuf, sizeof(aBuf), "pickup player='%d:%s' item=%d",
-				pChr->GetPlayer()->GetCID(), Server()->ClientName(pChr->GetPlayer()->GetCID()), m_Type);
-			GameServer()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "game", aBuf);
+			str_format(aBuf, sizeof(aBuf), "pickup player='%d:%s' item=%d map='%d",
+				pChr->GetPlayer()->GetCID(), Server()->ClientName(pChr->GetPlayer()->GetCID()), m_Type, GetMapID());
+			GameServer()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "game/multimap", aBuf);
 			int RespawnTime = g_pData->m_aPickups[m_Type].m_Respawntime;
 			if(RespawnTime >= 0)
 				m_SpawnTick = Server()->Tick() + Server()->TickSpeed() * RespawnTime;
@@ -136,6 +136,9 @@ void CPickup::TickPaused()
 
 void CPickup::Snap(int SnappingClient)
 {
+	if(GameServer()->Server()->ClientMapID(SnappingClient) != GetMapID())
+		return;
+
 	if(m_SpawnTick != -1 || NetworkClipped(SnappingClient))
 		return;
 

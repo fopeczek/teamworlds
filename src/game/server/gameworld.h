@@ -62,11 +62,11 @@ public:
 				to the entities.
 			max - Number of entities that fits into the ents array.
 			type - Type of the entities to find.
-
+			mapid - World of the character
 		Returns:
 			Number of entities found and added to the ents array.
 	*/
-	int FindEntities(vec2 Pos, float Radius, CEntity **ppEnts, int Max, int Type);
+	int FindEntities(vec2 Pos, float Radius, CEntity **ppEnts, int Max, int Type, int MapID);
 
 	/*
 		Function: closest_CEntity
@@ -77,11 +77,11 @@ public:
 			radius - How far off the CEntity is allowed to be
 			type - Type of the entities to find.
 			notthis - Entity to ignore
-
+			mapid - World of the character
 		Returns:
 			Returns a pointer to the closest CEntity or NULL if no CEntity is close enough.
 	*/
-	CEntity *ClosestEntity(vec2 Pos, float Radius, int Type, CEntity *pNotThis);
+	CEntity *ClosestEntity(vec2 Pos, float Radius, int Type, CEntity *pNotThis, int MapID);
 
 	/*
 		Function: interserct_CCharacter
@@ -93,11 +93,11 @@ public:
 			radius - How for from the line the CCharacter is allowed to be.
 			new_pos - Intersection position
 			notthis - Entity to ignore intersecting with
-
+			mapid - World of the character
 		Returns:
 			Returns a pointer to the closest hit or NULL of there is no intersection.
 	*/
-	class CCharacter *IntersectCharacter(vec2 Pos0, vec2 Pos1, float Radius, vec2 &NewPos, class CEntity *pNotThis = 0);
+	class CCharacter *IntersectCharacter(vec2 Pos0, vec2 Pos1, float Radius, vec2 &NewPos, int MapID, class CEntity *pNotThis = 0);
 
 	/*
 		Function: insert_entity
@@ -136,7 +136,7 @@ public:
 			is being created.
 	*/
 	void Snap(int SnappingClient);
-	
+
 	void PostSnap();
 
 	/*

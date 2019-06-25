@@ -121,7 +121,7 @@ void CGameContext::CreateHammerHit(vec2 Pos)
 }
 
 
-void CGameContext::CreateExplosion(vec2 Pos, int Owner, int Weapon, int MaxDamage)
+void CGameContext::CreateExplosion(vec2 Pos, int Owner, int Weapon, int MaxDamage, int MapID)
 {
 	// create the event
 	CNetEvent_Explosion *pEvent = (CNetEvent_Explosion *)m_Events.Create(NETEVENTTYPE_EXPLOSION, sizeof(CNetEvent_Explosion));
@@ -136,7 +136,7 @@ void CGameContext::CreateExplosion(vec2 Pos, int Owner, int Weapon, int MaxDamag
 	float Radius = g_pData->m_Explosion.m_Radius;
 	float InnerRadius = 48.0f;
 	float MaxForce = g_pData->m_Explosion.m_MaxForce;
-	int Num = m_World.FindEntities(Pos, Radius, (CEntity**)apEnts, MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER);
+	int Num = m_World.FindEntities(Pos, Radius, (CEntity**)apEnts, MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER, MapID);
 	for(int i = 0; i < Num; i++)
 	{
 		vec2 Diff = apEnts[i]->GetPos() - Pos;
@@ -1472,7 +1472,7 @@ void CGameContext::OnInit()
 
 
 	// select gametype
-	m_pController = new CGameControllerMOD(this);
+	m_pController = new CGameControllerDM(this);
 	/*if(str_comp_nocase(g_Config.m_SvGametype, "mod") == 0)
 
 	else if(str_comp_nocase(g_Config.m_SvGametype, "ctf") == 0)
@@ -1518,12 +1518,18 @@ void CGameContext::OnInit()
 
 void CGameContext::OnInitMap(int MapID)
 {
+	//if(MapID < (int)m_vLayers.size())
+		//return;
 	IEngineMap* pMap = Server()->GetMap(MapID);
-	m_Layers.Init(Kernel(), pMap);//Default map id
-	m_Collision.Init(&m_Layers);
+
+	m_vLayers.push_back(CLayers());
+	m_vCollision.push_back(CCollision());
+
+	m_vLayers[MapID].Init(Kernel(), pMap);//Default map id
+	m_vCollision[MapID].Init(&(m_vLayers[MapID]));
 
 	// create all entities from the game layer
-	CMapItemLayerTilemap *pTileMap = m_Layers.GameLayer();
+	CMapItemLayerTilemap *pTileMap = m_vLayers[MapID].GameLayer();
 	CTile *pTiles = (CTile *)pMap->GetData(pTileMap->m_Data);
 	for(int y = 0; y < pTileMap->m_Height; y++)
 	{
@@ -1534,10 +1540,14 @@ void CGameContext::OnInitMap(int MapID)
 			if(Index >= ENTITY_OFFSET)
 			{
 				vec2 Pos(x*32.0f+16.0f, y*32.0f+16.0f);
-				m_pController->OnEntity(Index-ENTITY_OFFSET, Pos);
+				m_pController->OnEntity(Index-ENTITY_OFFSET, Pos, MapID);
 			}
 		}
 	}
+
+	char aBuf[128];
+	str_format(aBuf, sizeof(aBuf), "Initalized new Map with ID '%d'", MapID);
+	Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "multimap", aBuf);
 }
 
 void CGameContext::OnShutdown()

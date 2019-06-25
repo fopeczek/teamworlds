@@ -462,6 +462,11 @@ bool CServer::ClientIngame(int ClientID) const
 	return ClientID >= 0 && ClientID < MAX_CLIENTS && m_aClients[ClientID].m_State == CServer::CClient::STATE_INGAME;
 }
 
+int CServer::ClientMapID(int ClientID) const
+{
+	return m_aClients[ClientID].m_MapID;
+}
+
 int CServer::MaxClients() const
 {
 	return m_NetServer.MaxClients();
@@ -1266,8 +1271,10 @@ int CServer::LoadMap(const char *pMapName)
 {
 	CMapData data;
 	m_vMapData.push_back(data);
+	m_vpMap.push_back(new CMap());
 
 	int MapID = m_vMapData.size()-1;
+
 	m_vMapData[MapID].m_pCurrentMapData = 0;
 	m_vMapData[MapID].m_CurrentMapSize = 0;
 	m_vMapData[MapID].m_MapChunksPerRequest = g_Config.m_SvMapDownloadSpeed;//Otherwise unitialized
@@ -1287,9 +1294,9 @@ int CServer::LoadMap(const char *pMapName)
 
 	Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "multimap", aBufMultiMap);
 
-	m_vpMap.push_back(new CMap());
 
-	if(!m_vpMap[MapID]->Load(aBuf, Kernel()))
+
+	if(!m_vpMap[MapID]->Load(aBuf, Kernel(), Storage()))
 		return 0;
 
 	// stop recording when we change map

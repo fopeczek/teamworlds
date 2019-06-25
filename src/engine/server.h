@@ -35,6 +35,7 @@ public:
 	virtual int GetClientInfo(int ClientID, CClientInfo *pInfo) const = 0;
 	virtual void GetClientAddr(int ClientID, char *pAddrStr, int Size) const = 0;
 	virtual int GetClientVersion(int ClientID) const = 0;
+	virtual int ClientMapID(int ClientID) const = 0;
 
 	virtual IEngineMap* GetMap(int MapID) const = 0;
 

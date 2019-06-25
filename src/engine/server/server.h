@@ -237,6 +237,7 @@ public:
 	const char *ClientClan(int ClientID) const;
 	int ClientCountry(int ClientID) const;
 	bool ClientIngame(int ClientID) const;
+	int ClientMapID(int ClientID) const override;
 	int MaxClients() const;
 
 	virtual int SendMsg(CMsgPacker *pMsg, int Flags, int ClientID);

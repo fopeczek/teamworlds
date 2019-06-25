@@ -17,11 +17,11 @@ class CGameControllerCTF : public IGameController
 
 public:
 	CGameControllerCTF(class CGameContext *pGameServer);
-	
+
 	// event
 	virtual int OnCharacterDeath(class CCharacter *pVictim, class CPlayer *pKiller, int Weapon);
 	virtual void OnFlagReturn(class CFlag *pFlag);
-	virtual bool OnEntity(int Index, vec2 Pos);
+	virtual bool OnEntity(int Index, vec2 Pos, int MapID);
 
 	// general
 	virtual void Snap(int SnappingClient);
