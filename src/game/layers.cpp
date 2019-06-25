@@ -15,7 +15,7 @@ CLayers::CLayers()
 
 void CLayers::Init(class IKernel *pKernel, IMap *pMap)
 {
-	m_pMap = pMap ? pMap : pKernel->RequestInterface<IMap>();
+	m_pMap = pMap; //? pMap : pKernel->RequestInterface<IMap>();
 	m_pMap->GetType(MAPITEMTYPE_GROUP, &m_GroupsStart, &m_GroupsNum);
 	m_pMap->GetType(MAPITEMTYPE_LAYER, &m_LayersStart, &m_LayersNum);
 
