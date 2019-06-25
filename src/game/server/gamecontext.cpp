@@ -1528,6 +1528,8 @@ void CGameContext::OnInitMap(int MapID)
 	m_vLayers[MapID].Init(Kernel(), pMap);//Default map id
 	m_vCollision[MapID].Init(&(m_vLayers[MapID]));
 
+	m_pController->SetSpawnNum((MapID+1));
+
 	// create all entities from the game layer
 	CMapItemLayerTilemap *pTileMap = m_vLayers[MapID].GameLayer();
 	CTile *pTiles = (CTile *)pMap->GetData(pTileMap->m_Data);

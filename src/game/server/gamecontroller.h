@@ -4,6 +4,7 @@
 #define GAME_SERVER_GAMECONTROLLER_H
 
 #include <base/vmath.h>
+#include <vector>
 
 #include <generated/protocol.h>
 
@@ -82,7 +83,15 @@ class IGameController
 		int m_FriendlyTeam;
 		float m_Score;
 	};
-	vec2 m_aaSpawnPoints[3][64];
+	//vec2 m_aaSpawnPoints[3][64];
+	enum
+	{
+		NUM_SPAWN_TYPES = 3,
+		NUM_SPAWN_PER_TYPE = 64,
+		NUM_SPAWN_WORLD = 3*64,
+	};
+	std::vector<vec2> m_vSpawnPoints;
+
 	int m_aNumSpawnPoints[3];
 
 	float EvaluateSpawnPos(CSpawnEval *pEval, vec2 Pos, int MapID) const;
@@ -165,6 +174,8 @@ public:
 	void OnPlayerReadyChange(class CPlayer *pPlayer);
 
 	void OnReset();
+
+	void SetSpawnNum(int MapNum){m_vSpawnPoints.reserve(MapNum*NUM_SPAWN_WORLD);}
 
 	// game
 	enum
