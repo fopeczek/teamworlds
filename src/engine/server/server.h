@@ -80,7 +80,6 @@ public:
 		MAX_MAPLISTENTRY_SEND = 32,
 		MIN_MAPLIST_CLIENTVERSION=0x0703,	// todo 0.8: remove me
 		MAX_RCONCMD_RATIO=8,
-		MAP_DEFAULT_ID=0
 	};
 
 	struct CMapListEntry;
@@ -138,6 +137,9 @@ public:
 		const CMapListEntry *m_pMapListEntryToSend;
 
 		void Reset();
+
+		int m_MapID;
+		int m_NextMapID;
 	};
 
 	CClient m_aClients[MAX_CLIENTS];
@@ -164,6 +166,7 @@ public:
 	enum
 	{
 		MAP_CHUNK_SIZE=NET_MAX_PAYLOAD-NET_MAX_CHUNKHEADERSIZE-4, // msg type
+		MAP_DEFAULT_ID=0,
 	};
 
 	struct CMapData
@@ -211,6 +214,8 @@ public:
 	virtual void SetClientCountry(int ClientID, int Country);
 	virtual void SetClientScore(int ClientID, int Score);
 
+	virtual IEngineMap* GetMap(int MapID) const override {return m_vpMap[MapID];}
+
 	void Kick(int ClientID, const char *pReason);
 
 	void DemoRecorder_HandleAutoStart();
@@ -242,6 +247,7 @@ public:
 	static int DelClientCallback(int ClientID, const char *pReason, void *pUser);
 
 	void SendMap(int ClientID, int MapID);
+	void ChangeClientMap(int ClientID);
 	void SendConnectionReady(int ClientID);
 	void SendRconLine(int ClientID, const char *pLine);
 	static void SendRconLineAuthed(const char *pLine, void *pUser, bool Highlighted);
@@ -253,14 +259,14 @@ public:
 	void SendMapListEntryRem(const CMapListEntry *pMapListEntry, int ClientID);
 	void UpdateClientMapListEntries();
 
-	void ProcessClientPacket(CNetChunk *pPacket, int MapID);
+	void ProcessClientPacket(CNetChunk *pPacket);
 
 	void SendServerInfo(int ClientID);
 	void GenerateServerInfo(CPacker *pPacker, int Token);
 
 	void PumpNetwork();
 
-	const char *GetMapName(int MapID) const;
+	const char *GetMapName(int MapID, char* aMapName) const;
 	int LoadMap(const char *pMapName);
 
 	void InitRegister(CNetServer *pNetServer, IEngineMasterServer *pMasterServer, IConsole *pConsole);
@@ -273,7 +279,7 @@ public:
 	static void ConShutdown(IConsole::IResult *pResult, void *pUser);
 	static void ConRecord(IConsole::IResult *pResult, void *pUser);
 	static void ConStopRecord(IConsole::IResult *pResult, void *pUser);
-	static void ConMapReload(IConsole::IResult *pResult, void *pUser);
+	static void ConSetMap(IConsole::IResult *pResult, void *pUser);
 	static void ConSaveConfig(IConsole::IResult *pResult, void *pUser);
 	static void ConLogout(IConsole::IResult *pResult, void *pUser);
 	static void ConchainSpecialInfoupdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
