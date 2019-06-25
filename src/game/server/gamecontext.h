@@ -156,6 +156,7 @@ public:
 
 	// engine events
 	virtual void OnInit();
+	virtual void OnInitMap(int MapID);
 	virtual void OnConsoleInit();
 	virtual void OnShutdown();
 
