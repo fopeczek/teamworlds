@@ -672,10 +672,11 @@ void CGameContext::OnClientConnected(int ClientID, bool Dummy, bool AsSpec)
 {
 	if(m_apPlayers[ClientID])
 	{
-		dbg_assert(m_apPlayers[ClientID]->IsDummy(), "invalid clientID");
+		//dbg_assert(m_apPlayers[ClientID]->IsDummy(), "invalid clientID");
 		OnClientDrop(ClientID, "removing dummy");
 	}
 
+	//if(!m_apPlayers[ClientID])
 	m_apPlayers[ClientID] = new(ClientID) CPlayer(this, ClientID, Dummy, AsSpec);
 
 	if(Dummy)
@@ -1468,12 +1469,12 @@ void CGameContext::OnInit()
 	for(int i = 0; i < NUM_NETOBJTYPES; i++)
 		Server()->SnapSetStaticsize(i, m_NetObjHandler.GetObjSize(i));
 
-	m_Layers.Init(Kernel());
-	m_Collision.Init(&m_Layers);
+
 
 	// select gametype
-	if(str_comp_nocase(g_Config.m_SvGametype, "mod") == 0)
-		m_pController = new CGameControllerMOD(this);
+	m_pController = new CGameControllerMOD(this);
+	/*if(str_comp_nocase(g_Config.m_SvGametype, "mod") == 0)
+
 	else if(str_comp_nocase(g_Config.m_SvGametype, "ctf") == 0)
 		m_pController = new CGameControllerCTF(this);
 	else if(str_comp_nocase(g_Config.m_SvGametype, "lms") == 0)
@@ -1483,24 +1484,9 @@ void CGameContext::OnInit()
 	else if(str_comp_nocase(g_Config.m_SvGametype, "tdm") == 0)
 		m_pController = new CGameControllerTDM(this);
 	else
-		m_pController = new CGameControllerDM(this);
+		m_pController = new CGameControllerDM(this);*/
 
-	// create all entities from the game layer
-	CMapItemLayerTilemap *pTileMap = m_Layers.GameLayer();
-	CTile *pTiles = (CTile *)Kernel()->RequestInterface<IMap>()->GetData(pTileMap->m_Data);
-	for(int y = 0; y < pTileMap->m_Height; y++)
-	{
-		for(int x = 0; x < pTileMap->m_Width; x++)
-		{
-			int Index = pTiles[y*pTileMap->m_Width+x].m_Index;
-
-			if(Index >= ENTITY_OFFSET)
-			{
-				vec2 Pos(x*32.0f+16.0f, y*32.0f+16.0f);
-				m_pController->OnEntity(Index-ENTITY_OFFSET, Pos);
-			}
-		}
-	}
+	OnInitMap(0);//default map is 0
 
 	Console()->Chain("sv_motd", ConchainSpecialMotdupdate, this);
 
@@ -1528,6 +1514,30 @@ void CGameContext::OnInit()
 			OnClientConnected(Server()->MaxClients() -i-1, true, false);
 	}
 #endif
+}
+
+void CGameContext::OnInitMap(int MapID)
+{
+	IEngineMap* pMap = Server()->GetMap(MapID);
+	m_Layers.Init(Kernel(), pMap);//Default map id
+	m_Collision.Init(&m_Layers);
+
+	// create all entities from the game layer
+	CMapItemLayerTilemap *pTileMap = m_Layers.GameLayer();
+	CTile *pTiles = (CTile *)pMap->GetData(pTileMap->m_Data);
+	for(int y = 0; y < pTileMap->m_Height; y++)
+	{
+		for(int x = 0; x < pTileMap->m_Width; x++)
+		{
+			int Index = pTiles[y*pTileMap->m_Width+x].m_Index;
+
+			if(Index >= ENTITY_OFFSET)
+			{
+				vec2 Pos(x*32.0f+16.0f, y*32.0f+16.0f);
+				m_pController->OnEntity(Index-ENTITY_OFFSET, Pos);
+			}
+		}
+	}
 }
 
 void CGameContext::OnShutdown()
