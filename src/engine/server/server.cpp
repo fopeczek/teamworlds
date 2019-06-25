@@ -1538,6 +1538,7 @@ void CServer::ChangeClientMap(int ClientID)
 		if(m_aClients[ClientID].m_State <= CClient::STATE_AUTH)
 			return;
 
+		GameServer()->KillCharacter(ClientID);
 		SendMap(ClientID, m_aClients[ClientID].m_NextMapID);
 		m_aClients[ClientID].Reset();
 		m_aClients[ClientID].m_State = aSpecs[ClientID] ? CClient::STATE_CONNECTING_AS_SPEC : CClient::STATE_CONNECTING;

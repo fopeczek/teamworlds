@@ -668,6 +668,12 @@ void CGameContext::OnClientEnter(int ClientID)
 	}
 }
 
+void CGameContext::KillCharacter(int ClientID)
+{
+	if(m_apPlayers[ClientID] && m_apPlayers[ClientID]->GetCharacter())
+		m_apPlayers[ClientID]->KillCharacter(-1);
+}
+
 void CGameContext::OnClientConnected(int ClientID, bool Dummy, bool AsSpec)
 {
 	if(m_apPlayers[ClientID])
