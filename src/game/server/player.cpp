@@ -20,7 +20,7 @@ CPlayer::CPlayer(CGameContext *pGameServer, int ClientID, bool Dummy, bool AsSpe
 	m_ScoreStartTick = Server()->Tick();
 	m_pCharacter = 0;
 	m_ClientID = ClientID;
-	m_Team = AsSpec ? TEAM_SPECTATORS : GameServer()->m_pController->GetStartTeam();
+	m_Team = AsSpec ? TEAM_SPECTATORS : GameServer()->m_pController(GameServer()->Server()->ClientMapID(m_ClientID))->GetStartTeam();
 	m_SpecMode = SPEC_FREEVIEW;
 	m_SpectatorID = -1;
 	m_pSpecFlag = 0;
@@ -29,8 +29,8 @@ CPlayer::CPlayer(CGameContext *pGameServer, int ClientID, bool Dummy, bool AsSpe
 	m_TeamChangeTick = Server()->Tick();
 	m_InactivityTickCounter = 0;
 	m_Dummy = Dummy;
-	m_IsReadyToPlay = !GameServer()->m_pController->IsPlayerReadyMode();
-	m_RespawnDisabled = GameServer()->m_pController->GetStartRespawnState();
+	m_IsReadyToPlay = !GameServer()->m_pController(GameServer()->Server()->ClientMapID(m_ClientID))->IsPlayerReadyMode();
+	m_RespawnDisabled = GameServer()->m_pController(GameServer()->Server()->ClientMapID(m_ClientID))->GetStartRespawnState();
 	m_DeadSpecMode = false;
 	m_Spawning = 0;
 }
@@ -75,7 +75,7 @@ void CPlayer::Tick()
 		m_pCharacter = 0;
 	}
 
-	if(!GameServer()->m_pController->IsGamePaused())
+	if(!GameServer()->m_pController(GameServer()->Server()->ClientMapID(m_ClientID))->IsGamePaused())
 	{
 		if(!m_pCharacter && m_Team == TEAM_SPECTATORS && m_SpecMode == SPEC_FREEVIEW)
 			m_ViewPos -= vec2(clamp(m_ViewPos.x-m_LatestActivity.m_TargetX, -500.0f, 500.0f), clamp(m_ViewPos.y-m_LatestActivity.m_TargetY, -400.0f, 400.0f));
@@ -146,7 +146,7 @@ void CPlayer::Snap(int SnappingClient)
 	pPlayerInfo->m_PlayerFlags = m_PlayerFlags&PLAYERFLAG_CHATTING;
 	if(Server()->IsAuthed(m_ClientID))
 		pPlayerInfo->m_PlayerFlags |= PLAYERFLAG_ADMIN;
-	if(!GameServer()->m_pController->IsPlayerReadyMode() || m_IsReadyToPlay)
+	if(!GameServer()->m_pController(GameServer()->Server()->ClientMapID(m_ClientID))->IsPlayerReadyMode() || m_IsReadyToPlay)
 		pPlayerInfo->m_PlayerFlags |= PLAYERFLAG_READY;
 	if(m_RespawnDisabled && (!GetCharacter() || !GetCharacter()->IsAlive()))
 		pPlayerInfo->m_PlayerFlags |= PLAYERFLAG_DEAD;
@@ -461,12 +461,12 @@ void CPlayer::SetTeam(int Team, bool DoChatMsg)
 void CPlayer::TryRespawn()
 {
 	vec2 SpawnPos;
-
-	if(!GameServer()->m_pController->CanSpawn(m_Team, &SpawnPos, GameServer()->Server()->ClientMapID(m_ClientID)))
+	int MapID = GameServer()->Server()->ClientMapID(m_ClientID);
+	if(!GameServer()->m_pController(MapID)->CanSpawn(m_Team, &SpawnPos, MapID))
 		return;
 
 	m_Spawning = false;
-	m_pCharacter = new(m_ClientID) CCharacter(&GameServer()->m_World, GameServer()->Server()->ClientMapID(m_ClientID));
+	m_pCharacter = new(m_ClientID) CCharacter(&GameServer()->m_World, MapID);
 	m_pCharacter->Spawn(this, SpawnPos);
 	GameServer()->CreatePlayerSpawn(SpawnPos);
 }

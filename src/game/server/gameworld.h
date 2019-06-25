@@ -27,8 +27,8 @@ public:
 	};
 
 private:
-	void Reset();
-	void RemoveEntities();
+	void Reset(int MapID);
+	void RemoveEntities(int MapID);
 
 	CEntity *m_pNextTraverseEntity;
 	CEntity *m_apFirstEntityTypes[NUM_ENTTYPES];
