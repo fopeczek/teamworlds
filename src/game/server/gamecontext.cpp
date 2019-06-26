@@ -670,8 +670,12 @@ void CGameContext::OnClientEnter(int ClientID)
 
 void CGameContext::KillCharacter(int ClientID)
 {
-	if(m_apPlayers[ClientID] && m_apPlayers[ClientID]->GetCharacter())
-		m_apPlayers[ClientID]->KillCharacter(-1);
+	if(m_apPlayers[ClientID])
+	{
+		if(m_apPlayers[ClientID]->GetCharacter())
+			m_apPlayers[ClientID]->KillCharacter(-1);
+		//m_apPlayers->SetSpawning(false);
+	}
 }
 
 void CGameContext::OnClientConnected(int ClientID, bool Dummy, bool AsSpec)
@@ -1524,8 +1528,9 @@ void CGameContext::OnInit()
 
 void CGameContext::OnInitMap(int MapID)
 {
-	//if(MapID < (int)m_vLayers.size())
-		//return;
+	if(MapID < (int)m_vLayers.size())//Map exists already, huray
+		return;
+
 	IEngineMap* pMap = Server()->GetMap(MapID);
 
 	m_vLayers.push_back(CLayers());

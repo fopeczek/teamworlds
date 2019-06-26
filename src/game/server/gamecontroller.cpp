@@ -47,9 +47,9 @@ IGameController::IGameController(CGameContext *pGameServer)
 	m_aMapWish[0] = 0;
 
 	// spawn
-	m_aNumSpawnPoints[0] = 0;
-	m_aNumSpawnPoints[1] = 0;
-	m_aNumSpawnPoints[2] = 0;
+	//m_aNumSpawnPoints[0] = 0;
+	//m_aNumSpawnPoints[1] = 0;
+	//m_aNumSpawnPoints[2] = 0;
 }
 
 //activity
@@ -286,22 +286,16 @@ bool IGameController::OnEntity(int Index, vec2 Pos, int MapID)
 
 	int Type = -1;
 
-	int SpawnIndex0 = MapID*NUM_SPAWN_WORLD+m_aNumSpawnPoints[0];
-	int SpawnIndex1 = MapID*NUM_SPAWN_WORLD+1*NUM_SPAWN_PER_TYPE+m_aNumSpawnPoints[1];
-	int SpawnIndex2 = MapID*NUM_SPAWN_WORLD+2*NUM_SPAWN_PER_TYPE+m_aNumSpawnPoints[2];
 	switch(Index)
 	{
 	case ENTITY_SPAWN:
-		m_vSpawnPoints[SpawnIndex0] = Pos;
-		m_aNumSpawnPoints[0]++;
+		m_vSpawnPoints[MapID].m_aaSpawnPoints[0][m_vNumSpawnPoints[MapID].m_aNumSpawnPoints[0]++] = Pos;
 		break;
 	case ENTITY_SPAWN_RED:
-		m_vSpawnPoints[SpawnIndex1] = Pos;
-		m_aNumSpawnPoints[1]++;
+		m_vSpawnPoints[MapID].m_aaSpawnPoints[1][m_vNumSpawnPoints[MapID].m_aNumSpawnPoints[1]++] = Pos;
 		break;
 	case ENTITY_SPAWN_BLUE:
-		m_vSpawnPoints[SpawnIndex2] = Pos;
-		m_aNumSpawnPoints[2]++;
+		m_vSpawnPoints[MapID].m_aaSpawnPoints[2][m_vNumSpawnPoints[MapID].m_aNumSpawnPoints[2]++] = Pos;
 		break;
 	case ENTITY_ARMOR_1:
 		Type = PICKUP_ARMOR;
@@ -432,6 +426,18 @@ void IGameController::OnReset()
 			GameServer()->m_apPlayers[i]->m_IsReadyToPlay = true;
 		}
 	}
+}
+
+void IGameController::SetSpawnNum(int MapNum)
+{
+	char aBuf[256];
+	str_format(aBuf, sizeof(aBuf), "Setting enviroment for MapID %d", MapNum-1);
+	GameServer()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "game", aBuf);
+
+	m_vSpawnPoints.resize(MapNum);
+	m_vNumSpawnPoints.resize(MapNum);
+	for(int i = 0; i < NUM_SPAWN_TYPES; ++i)
+		m_vNumSpawnPoints[MapNum-1].m_aNumSpawnPoints[i] = 0;
 }
 
 // game
@@ -1068,21 +1074,23 @@ float IGameController::EvaluateSpawnPos(CSpawnEval *pEval, vec2 Pos, int MapID) 
 
 void IGameController::EvaluateSpawnType(CSpawnEval *pEval, int Type, int MapID) const
 {
+	char aBuf[256];
+	str_format(aBuf, sizeof(aBuf), "Evaluate Spawn Map %d Type %d SpawnNum %d", MapID, Type, m_vNumSpawnPoints[MapID].m_aNumSpawnPoints[Type]);
+	GameServer()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "debug", aBuf);
 	// get spawn point
-	for(int i = 0; i < m_aNumSpawnPoints[Type]; i++)
+	for(int i = 0; i < m_vNumSpawnPoints[MapID].m_aNumSpawnPoints[Type]; i++)
 	{
 		// check if the position is occupado
 		CCharacter *aEnts[MAX_CLIENTS];
-		int SpawnIndex = MapID*NUM_SPAWN_WORLD+Type*NUM_SPAWN_PER_TYPE+i;
-		int Num = GameServer()->m_World.FindEntities(m_vSpawnPoints[SpawnIndex], 64, (CEntity**)aEnts, MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER, MapID);
+		int Num = GameServer()->m_World.FindEntities(m_vSpawnPoints[MapID].m_aaSpawnPoints[Type][i], 64, (CEntity**)aEnts, MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER, MapID);
 		vec2 Positions[5] = { vec2(0.0f, 0.0f), vec2(-32.0f, 0.0f), vec2(0.0f, -32.0f), vec2(32.0f, 0.0f), vec2(0.0f, 32.0f) };	// start, left, up, right, down
 		int Result = -1;
 		for(int Index = 0; Index < 5 && Result == -1; ++Index)
 		{
 			Result = Index;
 			for(int c = 0; c < Num; ++c)
-				if(GameServer()->Collision(MapID)->CheckPoint(m_vSpawnPoints[SpawnIndex]+Positions[Index]) ||
-					distance(aEnts[c]->GetPos(), m_vSpawnPoints[SpawnIndex]+Positions[Index]) <= aEnts[c]->GetProximityRadius())
+				if(GameServer()->Collision(MapID)->CheckPoint(m_vSpawnPoints[MapID].m_aaSpawnPoints[Type][i]+Positions[Index]) ||
+					distance(aEnts[c]->GetPos(), m_vSpawnPoints[MapID].m_aaSpawnPoints[Type][i]+Positions[Index]) <= aEnts[c]->GetProximityRadius())
 				{
 					Result = -1;
 					break;
@@ -1091,7 +1099,7 @@ void IGameController::EvaluateSpawnType(CSpawnEval *pEval, int Type, int MapID) 
 		if(Result == -1)
 			continue;	// try next spawn point
 
-		vec2 P = m_vSpawnPoints[SpawnIndex]+Positions[Result];
+		vec2 P = m_vSpawnPoints[MapID].m_aaSpawnPoints[Type][i]+Positions[Result];
 		float S = EvaluateSpawnPos(pEval, P, MapID);
 		if(!pEval->m_Got || pEval->m_Score > S)
 		{

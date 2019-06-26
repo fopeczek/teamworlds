@@ -90,9 +90,17 @@ class IGameController
 		NUM_SPAWN_PER_TYPE = 64,
 		NUM_SPAWN_WORLD = 3*64,
 	};
-	std::vector<vec2> m_vSpawnPoints;
 
-	int m_aNumSpawnPoints[3];
+	struct SpawnData {
+		vec2 m_aaSpawnPoints[3][64];
+	};
+
+	std::vector<SpawnData> m_vSpawnPoints;
+
+	struct NumSpawnData {
+		int m_aNumSpawnPoints[3];
+	};
+	std::vector<NumSpawnData> m_vNumSpawnPoints;
 
 	float EvaluateSpawnPos(CSpawnEval *pEval, vec2 Pos, int MapID) const;
 	void EvaluateSpawnType(CSpawnEval *pEval, int Type, int MapID) const;
@@ -175,7 +183,7 @@ public:
 
 	void OnReset();
 
-	void SetSpawnNum(int MapNum){m_vSpawnPoints.reserve(MapNum*NUM_SPAWN_WORLD);}
+	void SetSpawnNum(int MapNum);
 
 	// game
 	enum
