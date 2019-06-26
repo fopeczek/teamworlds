@@ -1550,43 +1550,24 @@ int CServer::Run()
 
 void CServer::ChangeClientMap(int ClientID)
 {
-	char aBuf[512];
-	char mapname[64];
-	if(m_aClients[ClientID].m_NextMapID == 0)
-		str_copy(mapname, g_Config.m_SvMap, sizeof(mapname));
-	else
-		str_copy(mapname, "dm1", sizeof(mapname));
-	// load map
-	if(LoadMap(mapname))
-	{
-		// new map loaded
-		bool aSpecs[MAX_CLIENTS];
-		for(int c = 0; c < MAX_CLIENTS; c++)
-			aSpecs[c] = GameServer()->IsClientSpectator(c);
+	//Invalid
+	if(m_aClients[ClientID].m_NextMapID < 0 || m_aClients[ClientID].m_NextMapID >= (int)m_vMapData.size())
+		return;
 
-		//GameServer()->OnShutdown();
+	// new map loaded
+	bool aSpecs[MAX_CLIENTS];
+	for(int c = 0; c < MAX_CLIENTS; c++)
+		aSpecs[c] = GameServer()->IsClientSpectator(c);
 
-		if(m_aClients[ClientID].m_State <= CClient::STATE_AUTH)
-			return;
+	if(m_aClients[ClientID].m_State <= CClient::STATE_AUTH)
+		return;
 
-		GameServer()->KillCharacter(ClientID);
-		SendMap(ClientID, m_aClients[ClientID].m_NextMapID);
-		m_aClients[ClientID].Reset();
-		m_aClients[ClientID].m_State = aSpecs[ClientID] ? CClient::STATE_CONNECTING_AS_SPEC : CClient::STATE_CONNECTING;
+	GameServer()->KillCharacter(ClientID);
+	SendMap(ClientID, m_aClients[ClientID].m_NextMapID);
+	m_aClients[ClientID].Reset();
+	m_aClients[ClientID].m_State = aSpecs[ClientID] ? CClient::STATE_CONNECTING_AS_SPEC : CClient::STATE_CONNECTING;
 
-		//m_GameStartTime = time_get();
-		//m_CurrentGameTick = 0;
-		//Kernel()->ReregisterInterface(GameServer());
-		//TODO createentities here
-		//GameServer()->OnInit();
-		GameServer()->OnInitMap(m_aClients[ClientID].m_NextMapID);
-	}
-	else
-	{
-		str_format(aBuf, sizeof(aBuf), "failed to load map. mapname='%s' for ClientID '%d'", mapname, ClientID);
-		Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "multimap", aBuf);
-		str_copy(g_Config.m_SvMap, m_vMapData[MAP_DEFAULT_ID].m_aCurrentMap, sizeof(g_Config.m_SvMap));
-	}
+	GameServer()->OnInitMap(m_aClients[ClientID].m_NextMapID);
 }
 
 int CServer::MapListEntryCallback(const char *pFilename, int IsDir, int DirType, void *pUser)
