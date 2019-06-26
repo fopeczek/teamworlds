@@ -330,6 +330,31 @@ void CServer::SetClientScore(int ClientID, int Score)
 	m_aClients[ClientID].m_Score = Score;
 }
 
+void CServer::SetClientMap(int ClientID, int MapID)
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS || MapID < 0 || MapID >= (int)m_vpMap.size())
+		return;
+	m_aClients[ClientID].m_NextMapID = MapID;//Server Run does the rest
+}
+
+void CServer::SetClientMap(int ClientID, char* MapName)
+{
+	for(int i = 0; i < (int)m_vMapData.size(); ++i)
+	{
+		if(str_comp(m_vMapData[i].m_aCurrentMap, MapName) == 0)
+		{
+			SetClientMap(ClientID, i);
+			return;
+		}
+	}
+	//Map not loaded
+	if(LoadMap(MapName))
+	{
+		//Must be the last loaded map
+		m_aClients[ClientID].m_NextMapID = (int)m_vMapData.size()-1;
+	}
+}
+
 void CServer::Kick(int ClientID, const char *pReason)
 {
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS || m_aClients[ClientID].m_State == CClient::STATE_EMPTY)
@@ -1270,6 +1295,16 @@ const char *CServer::GetMapName(int MapID, char* aMapName) const
 int CServer::LoadMap(const char *pMapName)
 {
 	CMapData data;
+	char aBufMultiMap[512];
+	for(int i = 0; i < (int)m_vMapData.size(); ++i)
+	{
+		if(str_comp(m_vMapData[i].m_aCurrentMap, pMapName) == 0)
+		{
+			str_format(aBufMultiMap, sizeof(aBufMultiMap), "Map %s already loaded (MapID=%d)", pMapName, i);
+			Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "multimap", aBufMultiMap);
+			return 1;
+		}
+	}
 	m_vMapData.push_back(data);
 	m_vpMap.push_back(new CMap());
 
@@ -1289,12 +1324,8 @@ int CServer::LoadMap(const char *pMapName)
 		return 0;
 	}
 
-	char aBufMultiMap[512];
 	str_format(aBufMultiMap, sizeof(aBufMultiMap), "Loading Map with ID '%d' and name '%s'", MapID, pMapName);
-
 	Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "multimap", aBufMultiMap);
-
-
 
 	if(!m_vpMap[MapID]->Load(aBuf, Kernel(), Storage()))
 		return 0;
@@ -1690,17 +1721,14 @@ void CServer::ConStopRecord(IConsole::IResult *pResult, void *pUser)
 	((CServer *)pUser)->m_DemoRecorder.Stop();
 }
 
-void CServer::ConSetMap(IConsole::IResult *pResult, void *pUser)
+void CServer::ConSetMapByID(IConsole::IResult *pResult, void *pUser)
 {
 	CServer* pServer = (CServer *)pUser;
 	if(pResult->NumArguments() > 1)
 	{
 		int MapID = pResult->GetInteger(0);
 		int ClientID = pResult->GetInteger(1);
-		if(ClientID < 0 || ClientID >= MAX_CLIENTS || MapID < MAP_DEFAULT_ID)
-			return;
-
-		pServer->m_aClients[ClientID].m_NextMapID = MapID;
+		pServer->SetClientMap(ClientID, MapID);
 
 		char aBuf[64];
 		str_format(aBuf, sizeof(aBuf), "Reloaded Map with ID %d for client %d", MapID, ClientID);
@@ -1709,16 +1737,44 @@ void CServer::ConSetMap(IConsole::IResult *pResult, void *pUser)
 	else if(pResult->NumArguments() > 0)
 	{
 		int MapID = pResult->GetInteger(0);
-		if(MapID < MAP_DEFAULT_ID)
-			return;
 
 		for(int i = 0; i < MAX_CLIENTS; ++i)
 		{
 			if(pServer->m_aClients[i].m_State > CClient::STATE_AUTH)
-				pServer->m_aClients[i].m_NextMapID = MapID;
+				pServer->SetClientMap(i, MapID);
 		}
 		char aBuf[64];
 		str_format(aBuf, sizeof(aBuf), "Reloaded Map with ID %d for all clients", MapID);
+		pServer->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "multimap", aBuf);
+	}
+}
+
+void CServer::ConSetMapByName(IConsole::IResult *pResult, void *pUser)
+{
+	CServer* pServer = (CServer *)pUser;
+	char aMapBuf[64];
+	if(pResult->NumArguments() > 1)
+	{
+		str_copy(aMapBuf, pResult->GetString(0), sizeof(aMapBuf));
+		int ClientID = pResult->GetInteger(1);
+
+		pServer->SetClientMap(ClientID, aMapBuf);
+
+		char aBuf[64];
+		str_format(aBuf, sizeof(aBuf), "Reloaded Map with name %s for client %d", aMapBuf, ClientID);
+		pServer->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "multimap", aBuf);
+	}
+	else if(pResult->NumArguments() > 0)
+	{
+		str_copy(aMapBuf, pResult->GetString(0), sizeof(aMapBuf));
+
+		for(int i = 0; i < MAX_CLIENTS; ++i)
+		{
+			if(pServer->m_aClients[i].m_State > CClient::STATE_AUTH)
+				pServer->SetClientMap(i, aMapBuf);
+		}
+		char aBuf[64];
+		str_format(aBuf, sizeof(aBuf), "Reloaded Map with name %s for all clients", aMapBuf);
 		pServer->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "multimap", aBuf);
 	}
 }
@@ -1825,7 +1881,8 @@ void CServer::RegisterCommands()
 	Console()->Register("record", "?s", CFGFLAG_SERVER|CFGFLAG_STORE, ConRecord, this, "Record to a file");
 	Console()->Register("stoprecord", "", CFGFLAG_SERVER, ConStopRecord, this, "Stop recording");
 
-	Console()->Register("setmap", "i?i", CFGFLAG_SERVER, ConSetMap, this, "Set <mapid> [<playerid>]");
+	Console()->Register("set_map_by_mapid", "i?i", CFGFLAG_SERVER, ConSetMapByID, this, "Set <mapid> [<playerid>]");
+	Console()->Register("set_map_by_mapname", "s?i", CFGFLAG_SERVER, ConSetMapByName, this, "Set <mapname> [<playerid>]");
 
 	Console()->Chain("sv_name", ConchainSpecialInfoupdate, this);
 	Console()->Chain("password", ConchainSpecialInfoupdate, this);

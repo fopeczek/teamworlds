@@ -55,6 +55,10 @@ public:
 	virtual void SetClientCountry(int ClientID, int Country) = 0;
 	virtual void SetClientScore(int ClientID, int Score) = 0;
 
+	//Multimap
+	virtual void SetClientMap(int ClientID, int MapID) = 0;
+	virtual void SetClientMap(int ClientID, char* MapName) = 0;
+
 	virtual int SnapNewID() = 0;
 	virtual void SnapFreeID(int ID) = 0;
 	virtual void *SnapNewItem(int Type, int ID, int Size) = 0;
@@ -93,7 +97,10 @@ public:
 	virtual void OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID) = 0;
 
 	virtual void OnClientConnected(int ClientID, bool AsSpec) = 0;
+
+	//Multimap
 	virtual void KillCharacter(int ClientID) = 0;
+
 	virtual void OnClientEnter(int ClientID) = 0;
 	virtual void OnClientDrop(int ClientID, const char *pReason) = 0;
 	virtual void OnClientDirectInput(int ClientID, void *pInput) = 0;

@@ -214,6 +214,10 @@ public:
 	virtual void SetClientCountry(int ClientID, int Country);
 	virtual void SetClientScore(int ClientID, int Score);
 
+	//Multimap
+	virtual void SetClientMap(int ClientID, int MapID);
+	virtual void SetClientMap(int ClientID, char* MapName);
+
 	virtual IEngineMap* GetMap(int MapID) const override {return m_vpMap[MapID];}
 
 	void Kick(int ClientID, const char *pReason);
@@ -280,7 +284,8 @@ public:
 	static void ConShutdown(IConsole::IResult *pResult, void *pUser);
 	static void ConRecord(IConsole::IResult *pResult, void *pUser);
 	static void ConStopRecord(IConsole::IResult *pResult, void *pUser);
-	static void ConSetMap(IConsole::IResult *pResult, void *pUser);
+	static void ConSetMapByID(IConsole::IResult *pResult, void *pUser);
+	static void ConSetMapByName(IConsole::IResult *pResult, void *pUser);
 	static void ConSaveConfig(IConsole::IResult *pResult, void *pUser);
 	static void ConLogout(IConsole::IResult *pResult, void *pUser);
 	static void ConchainSpecialInfoupdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
