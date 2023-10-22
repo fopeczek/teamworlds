@@ -722,7 +722,11 @@ void CGameContext::KillCharacter(int ClientID)
 
 void CGameContext::OnClientConnected(int ClientID, bool Dummy, bool AsSpec)
 {
-	dbg_assert(!m_apPlayers[ClientID], "non-free player slot");
+    if(m_apPlayers[ClientID])
+    {
+        //dbg_assert(m_apPlayers[ClientID]->IsDummy(), "invalid clientID");
+        OnClientDrop(ClientID, "removing dummy");
+    }
 
 	m_apPlayers[ClientID] = new(ClientID) CPlayer(this, ClientID, Dummy, AsSpec);
 
@@ -1612,9 +1616,6 @@ void CGameContext::OnInit()
 	static const int OLD_NUM_NETOBJTYPES = 23;
 	for(int i = 0; i < OLD_NUM_NETOBJTYPES; i++)
 		Server()->SnapSetStaticsize(i, m_NetObjHandler.GetObjSize(i));
-
-	m_Layers.Init(Kernel());
-	m_Collision.Init(&m_Layers);
 
 	// select gametype
 	if(str_comp_nocase(Config()->m_SvGametype, "mod") == 0)

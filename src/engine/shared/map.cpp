@@ -69,3 +69,5 @@ bool CMap::Load(const char *pMapName, IKernel *pKernel, IStorage *pStorage)
 		}
 	return true;
 }
+
+extern IEngineMap *CreateEngineMap() { return new CMap; }

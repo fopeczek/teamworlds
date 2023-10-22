@@ -1245,13 +1245,13 @@ void CServer::PumpNetwork()
 	m_Econ.Update();
 }
 
-const char *CServer::GetMapName(int MapID, char* aMapName)
+const char *CServer::GetMapName(int MapID, char* aMapName) const
 {
 	// get the name of the map without his path
 	//char *pMapShortName = &g_Config.m_SvMap[0];
 
 	if(MapID >= (int)m_vMapData.size())//Ugly af
-		str_copy(aMapName, Config()->m_SvMap, sizeof(aMapName));
+		str_copy(aMapName, m_pConfig->m_SvMap, sizeof(aMapName));
 	else
 		str_copy(aMapName, m_vMapData[MapID].m_aCurrentMap, sizeof(aMapName));
 
@@ -1284,13 +1284,13 @@ int CServer::LoadMap(const char *pMapName)
 
 	m_vMapData[MapID].m_pCurrentMapData = 0;
 	m_vMapData[MapID].m_CurrentMapSize = 0;
-	m_vMapData[MapID].m_MapChunksPerRequest = g_Config.m_SvMapDownloadSpeed;//Otherwise unitialized
+	m_vMapData[MapID].m_MapChunksPerRequest = Config()->m_SvMapDownloadSpeed;//Otherwise unitialized
 
 	char aBuf[512];
 	str_format(aBuf, sizeof(aBuf), "maps/%s.map", pMapName);
 
 	// check for valid standard map
-	if(!m_MapChecker->ReadAndValidateMap(aBuf, IStorage::TYPE_ALL))
+	if(!m_pMapChecker->ReadAndValidateMap(aBuf, IStorage::TYPE_ALL))
 	{
 		Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "mapchecker", "invalid standard map");
 		return 0;
@@ -1347,6 +1347,7 @@ void CServer::InitInterfaces(IKernel *pKernel)
 	m_pConfig = pKernel->RequestInterface<IConfigManager>()->Values();
 	m_pConsole = pKernel->RequestInterface<IConsole>();
 	m_pGameServer = pKernel->RequestInterface<IGameServer>();
+    m_pMapChecker = pKernel->RequestInterface<IMapChecker>();
 	m_pStorage = pKernel->RequestInterface<IStorage>();
 }
 
@@ -1435,39 +1436,34 @@ int CServer::Run()
 				}
 			}
 
-			int64 Now = time_get();
-			bool NewTicks = false;
-			bool ShouldSnap = false;
-			while(Now > TickStartTime(m_CurrentGameTick+1))
+			while(t > TickStartTime(m_CurrentGameTick+1))
 			{
-				m_CurrentGameTick++;
-				NewTicks = true;
-				if((m_CurrentGameTick%2) == 0)
-					ShouldSnap = true;
+                m_CurrentGameTick++;
+                NewTicks++;
 
-				// apply new input
-				for(int c = 0; c < MAX_CLIENTS; c++)
-				{
-					if(m_aClients[c].m_State == CClient::STATE_EMPTY)
-						continue;
-					for(int i = 0; i < 200; i++)
-					{
-						if(m_aClients[c].m_aInputs[i].m_GameTick == Tick())
-						{
-							if(m_aClients[c].m_State == CClient::STATE_INGAME)
-								GameServer()->OnClientPredictedInput(c, m_aClients[c].m_aInputs[i].m_aData);
-							break;
-						}
-					}
-				}
+                // apply new input
+                for(int c = 0; c < MAX_CLIENTS; c++)
+                {
+                    if(m_aClients[c].m_State == CClient::STATE_EMPTY)
+                        continue;
+                    for(int i = 0; i < 200; i++)
+                    {
+                        if(m_aClients[c].m_aInputs[i].m_GameTick == Tick())
+                        {
+                            if(m_aClients[c].m_State == CClient::STATE_INGAME)
+                                GameServer()->OnClientPredictedInput(c, m_aClients[c].m_aInputs[i].m_aData);
+                            break;
+                        }
+                    }
+                }
 
-				GameServer()->OnTick();
+                GameServer()->OnTick();
 			}
 
 			// snap game
 			if(NewTicks)
 			{
-				if(Config()->m_SvHighBandwidth || ShouldSnap)
+                if(Config()->m_SvHighBandwidth || (m_CurrentGameTick%2) == 0)
 					DoSnapshot();
 
 				UpdateClientRconCommands();
@@ -1494,7 +1490,7 @@ int CServer::Run()
 	m_Econ.Shutdown();
 
 	GameServer()->OnShutdown();
-    Free()
+    Free();
 
 	return 0;
 }
@@ -1961,6 +1957,7 @@ int main(int argc, const char **argv)
 	int FlagMask = CFGFLAG_SERVER|CFGFLAG_ECON;
 	IEngine *pEngine = CreateEngine("Teeworlds_Server");
 	//IEngineMap *pEngineMap = CreateEngineMap();
+    IMapChecker *pMapChecker = CreateMapChecker();
 	IGameServer *pGameServer = CreateGameServer();
 	IConsole *pConsole = CreateConsole(CFGFLAG_SERVER|CFGFLAG_ECON);
 	IEngineMasterServer *pEngineMasterServer = CreateEngineMasterServer();
@@ -1976,6 +1973,7 @@ int main(int argc, const char **argv)
 		RegisterFail = RegisterFail || !pKernel->RegisterInterface(pEngine);
 		//RegisterFail = RegisterFail || !pKernel->RegisterInterface(static_cast<IEngineMap*>(pEngineMap)); // register as both
 		//RegisterFail = RegisterFail || !pKernel->RegisterInterface(static_cast<IMap*>(pEngineMap));
+        RegisterFail = RegisterFail || !pKernel->RegisterInterface(pMapChecker);
 		RegisterFail = RegisterFail || !pKernel->RegisterInterface(pGameServer);
 		RegisterFail = RegisterFail || !pKernel->RegisterInterface(pConsole);
 		RegisterFail = RegisterFail || !pKernel->RegisterInterface(pStorage);
@@ -2023,6 +2021,7 @@ int main(int argc, const char **argv)
 	delete pKernel;
 	delete pEngine;
 	//delete pEngineMap;
+    delete pMapChecker;
 	delete pGameServer;
 	delete pConsole;
 	delete pEngineMasterServer;
