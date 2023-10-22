@@ -28,6 +28,8 @@ map_version*
 mastersrv*
 packetgen*
 teeworlds*
+server.cfg
+run_teeworlds_srv
 !other/bash-completion/teeworlds
 !teeworlds.manifest
 !teeworlds.rc
@@ -55,6 +57,7 @@ tags
 # CMake
 data
 generated
+cmake-build-debug
 
 .ninja_deps
 .ninja_log

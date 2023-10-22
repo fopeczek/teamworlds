@@ -1,214 +1,250 @@
-<a href="https://repology.org/metapackage/teeworlds/versions">
-    <img src="https://repology.org/badge/vertical-allrepos/teeworlds.svg" alt="Packaging status" align="right">
-</a>
+Teamwolrds
+==========
+Teamworlds is a fork of a famous game [Teeworlds](https://github.com/teeworlds/teeworlds), that enhances gameplay and promotes team cooperation, by introduction player classes.
 
-Teeworlds ![GitHub Actions](https://github.com/teeworlds/teeworlds/workflows/Build/badge.svg)
-=========
+While I was playng [Teeworlds](https://github.com/teeworlds/teeworlds) I noticed that the gaming experience is essentially equivelant to playing single player game against NPCs. 
 
-A retro multiplayer shooter
----------------------------
+My main idea behind creating this fork was to make teeworlds more cooperative game. 
 
-Teeworlds is a free online multiplayer game, available for all major
-operating systems. Battle with up to 16 players in a variety of game
-modes, including Team Deathmatch and Capture The Flag. You can even
-design your own maps!
+This readme assumes that you know basics of teeworlds and some simple tricks like (rocket jumping, wall [rocket] jumping, rocket boosting, etc.). 
 
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any damages
-arising from the use of this software. See license.txt for full license
-text including copyright information.
+How to play
+-----------
+Launch a standard [Teeworlds](https://github.com/teeworlds/teeworlds) client
 
-Please visit https://www.teeworlds.com/ for up-to-date information about
-the game, including new versions, custom maps and much more.
+Then go to the multiplayer lobby, and join a server with game type named TeamUp. I will be running two servers: one that is for testing, but propably still working named: "! ! ! ! Silence ! by Silent", and one that is official named: "! ! Official Teamworlds server by Silent"
 
-Originally written by Magnus Auvinen.
+![Notice that server type is named TeamUp](datasrc/github/server.png "Notice that server type is named TeamUp")
+---------
+Once you have joined my server you will be spawned in lobby room, where you pick a class that you want to play (classes are explained later).
 
----
+In lobby you can't kill or hook anybody.
 
-Teeworlds supports two build systems: CMake and bam.
+![This is lobby](/datasrc/github/Lobby.png "This is lobby")
+------------
+Every weapon represents a different class available in my server.
 
-Building on Linux or macOS (CMake)
-==========================
+![This is lobby](/datasrc/github/Lobby&weapons.png "This is lobby")
 
-Installing dependencies
------------------------
+Here you can find all info about each class: [ 
+[Engineer](https://github.com/fopeczek/teeworlds#-engineer-) | 
+[Spider](https://github.com/fopeczek/teeworlds#-spider-) | 
+[Scout](https://github.com/fopeczek/teeworlds#-scout-) | 
+[Tank](https://github.com/fopeczek/teeworlds#-tank-) | 
+[Hunter](https://github.com/fopeczek/teeworlds#-hunter-) | 
+[Medic](https://github.com/fopeczek/teeworlds#-medic-) | 
+[Armorer](https://github.com/fopeczek/teeworlds#-armorer-)
+ ]
 
-    # Debian/Ubuntu
-    sudo apt install build-essential cmake git libfreetype6-dev libsdl2-dev libpnglite-dev libwavpack-dev python3
+----------
+<details>
+ <summary><h1> Engineer </h1></summary>
+Engineer is a defensive class capable of building and maintaining defensive walls (force fields). It spawns with laser gun that can place those walls. 
+
+How to place a wall:
+
+https://user-images.githubusercontent.com/46483193/160856467-b97a966d-c65a-4f0d-ba28-de5414473040.mp4
+
+Each player can have utmost 6 simultaneously active walls. If you will try to place 7th wall you will hear empty magazine sound. 
+ 
+Also very imprtant: you can't place too short wall, if you try so, you will hear same empty magazine sound. 
+
+Every wall has certain amount of hit points, just like a player. Amount of hp is represented by floating (unpickupable) hearts. Each wall can have up to 10 health. 
+
+Newly placed wall can consume up to 5 units of laser gun ammo. Each consumed unit of ammo translates into a single hp of newly-built wall. Since the ammo capacity of laser gun equals 10 units, a player can place exactly 2 walls, each charged with 5 hp. 
+ 
+ If you manage to get less than 5 ammo, you can still place a wall but, as mentioned it will have less initaial hp. 
+
+Here is an example of placing a wall while having only 2 units of laser ammo:
+
+https://user-images.githubusercontent.com/46483193/160859914-556015ea-b583-494b-805c-cb71195c371d.mp4
+
+Player can charge the wall up to maximum number of 10 hit points. To do that, player has to hit one of the ends of the wall with hammer. Each strike will transfer a single armor point (a shield) into a hp of wall. When no more armor points are available, the strike will transfer a player's hitpoint (a heart) to the wall. Player cannot transfer their last hitpoint this way. 
+
+https://user-images.githubusercontent.com/46483193/160863490-34caec9a-383b-4349-b3a2-ca219249ba85.mp4
+
+As you can see you aren't able to die just by healing walls.
+
+Walls block bullets and kill enemies on contact. Wall loses 1 hp when it is hit with a normal bullet, wall will lose aditional 1 hp if the bullet is explosive. 
+
+Walls can't block lasers. 
+
+When wall is hit with hammer it loses 3 hp. 
+
+https://user-images.githubusercontent.com/46483193/160891224-809b44a6-df3a-4af5-8146-47d45a5edb75.mp4
+
+Wall will get 2 times more damage if you shoot directly in one of its ends. 
+
+https://user-images.githubusercontent.com/46483193/160893735-a77abd65-21a4-4547-959d-3e20c40f9470.mp4
+
+When player rams a wall with full health bar the wall will kill him, and lose 1 hp. If player does so but with armor too wall will lose 2 hp. 
+
+https://user-images.githubusercontent.com/46483193/160925533-9e447ebb-0c0c-41bc-9545-5516bc8c5079.mp4
+
+When someone destroys your wall you will get a private message that informs you about who destroyed it. 
+Every wall after being destroyed creates explosions at its ends. 
+
+https://user-images.githubusercontent.com/46483193/160912584-e4137de1-b9c3-47a4-81b5-15d0d267c184.mp4
+
+For each destroyed wall player (that who destroyed them) gets 1 score point. 
+Player can deconstruct the wall and reclaim all the ammo and hitpoints back. 
+
+###### Process of wall reclaiming: 
+ 
+To reclaim a wall, player has to stand very close to one end of his wall, and shoot anywhare with the pistol. Initialy first 5 wall hp will be transfered as player's laser gun ammo the wall's hp above 5 will be transfered as health (preferably) or armor (if the health bar is already full). After that transfer, the remaining maximum 5 hitpoints will be transfered back as laser gun ammo. 
+
+https://user-images.githubusercontent.com/46483193/160885179-366861b5-1f1c-4fc6-850f-98b0dd6f25d9.mp4
+
+The algorithm allows to permanently loose wall's hp during deconstrcution, if there is no available place to transfer them back to player. In such situations the first shot will only aattempt to transfer the upper 5 hitpoints back as health and armor, if player has capacity to accept them, and the wall will continue to exist with the reduced hp. To remove the wall and lose part or all of its remaining hp, the player has to shoot the second time.
+
+There are exctly 2 cases when you would have to confirm removing a wall:
+1. To prevent loosing health or armor points, if the total available capacity of health and armor is less then wall's hp minus 5
+
+https://user-images.githubusercontent.com/46483193/160885798-7d6c77b6-e952-4c2a-bb4e-5dc06c4d9e4b.mp4
+
+
+2. To prevent loosing laser ammo, if your capacity to accept the laser ammo is less than wall's hp or 5, whichever is smaller. 
+
+https://user-images.githubusercontent.com/46483193/160885837-396ca786-ab69-402d-984d-a84134a8666f.mp4
+
+</details>
+
+
+---------
+
+<details>
+ <summary><h1> Spider </h1></summary>
+Spider offensive and defensive class. 
+
+Spiders can place webs, that are similar to [engineer](https://github.com/fopeczek/teamworlds/edit/main/readme.md#-engineer-) walls. Spider cannot use the shotgun, but instead can lay webs and anchor its chain on every surface wall. Spiders can also hook other players infinitely.
+
+<h2> Spider's webs</h2>
+
+* Spider lays the web by "shooting" somewhere with their shotgun. The web takes 5 shotgun shells.
+* Spiders always place 5 web "rays" with a single use of the shotgun.
+* The only effect of the webs is slowing down the enemy team and informing the owner about enemy activity.
+* Non-reinforced web will vanish in 5 min.
+* Web can be reinforced once, by "shooting" it with shotgun by the Spider. Reinforced web has more hp, does not have a timeout. 
+* Removing webs recycles its materials by giving you back the shotgun ammo. Partially destroyed web can be recycled for a fraction of original cost. 
+
+<h2> Ohter features</h2>
+
+Spiders can hook to the metal walls. 
+
+https://user-images.githubusercontent.com/46483193/161601841-42232993-6a08-40d4-8918-6beb0b969088.mp4
+
+
+Spiders can hook to other players for infinite time.
+
+https://user-images.githubusercontent.com/46483193/161605427-aed0bd8d-4dd5-4cda-bc12-76cd607e83d9.mp4
     
-    # Fedora
-    sudo dnf install @development-tools cmake gcc-c++ git freetype-devel pnglite-devel python3 SDL2-devel wavpack-devel
     
-    # Arch Linux (doesn't have pnglite in its repositories)
-    sudo pacman -S --needed base-devel cmake freetype2 git python sdl2 wavpack
-    
-    # macOS
-    brew install cmake freetype sdl2
+Spider have something like spider sense, which tells the spider/owner of certain web, where some enemy has been trapped in it. 
 
 
-Downloading repository
-----------------------
-
-    git clone https://github.com/teeworlds/teeworlds --recurse-submodules
-    cd teeworlds
-    
-    # If you already cloned the repository before, use:
-    # git submodule update --init
+ </details>
 
 
-Building
---------
 
-    mkdir -p build
-    cd build
-    cmake ..
-    make
+----------
 
-On subsequent builds, you only have to repeat the `make` step.
-
-You can then run the client with `./teeworlds` and the server with
-`./teeworlds_srv`.
+<details>
+ <summary><h1> Scout </h1></summary>
+Scout is offensive class, his special abitlity is rocket boosting and jumping using granade launcher. 
+He also spawns with granade launcher. 
 
 
-Build options
--------------
+He does only 1 hp of self damage. Tip: To rocket jump you have to fire underneath yourself and jump at the same time. 
+Here is video of rocket boosting and jumping. 
 
-The following options can be passed to the `cmake ..` command line (between the
-`cmake` and `..`) in the "Building" step above.
-
-`-GNinja`: Use the Ninja build system instead of Make. This automatically
-parallelizes the build and is generally **faster**. (Needs `sudo apt install
-ninja-build` on Debian, `sudo dnf install ninja-build` on Fedora, and `sudo
-pacman -S --needed ninja` on Arch Linux.)
-
-`-DDEV=ON`: Enable debug mode and disable some release mechanics. This leads to
-**faster** builds.
-
-`-DCLIENT=OFF`: Disable generation of the client target. Can be useful on
-headless servers which don't have graphics libraries like SDL2 installed.
-
-Building on Linux or macOS (bam)
-==========================
-
-Installing dependencies
------------------------
-
-    # Debian/Ubuntu 19.10+
-    sudo apt install bam git libfreetype6-dev libsdl2-dev libpnglite-dev libwavpack-dev python3
-    
-    # Fedora
-    sudo dnf install bam gcc-c++ git freetype-devel pnglite-devel python3 SDL2-devel wavpack-devel
-    
-    # Arch Linux (doesn't have pnglite in its repositories)
-    sudo pacman -S --needed base-devel bam freetype2 git python sdl2 wavpack
-    
-    # macOS
-    brew install bam freetype sdl2
-    
-    # other (add bam to your path)
-    git clone https://github.com/teeworlds/bam
-    cd bam
-    ./make_unix.sh
+https://user-images.githubusercontent.com/46483193/161442033-0d9c7057-7f9d-4bc5-9d24-fe7462b17448.mp4
 
 
-Downloading repository
-----------------------
+Also his granade launcher makes more knock back to other players than other classes. And he does only 3 hp of damage to others. 
 
-    git clone https://github.com/teeworlds/teeworlds --recurse-submodules
-    cd teeworlds
-    
-    # If you already cloned the repository before, use:
-    # git submodule update --init
+https://user-images.githubusercontent.com/46483193/161442031-0e1cfeeb-4e91-4d91-9066-a7496e6adf68.mp4
 
+ </details>
 
-Building
---------
+---------
 
-    bam
+<details>
+ <summary><h1> Tank </h1></summary>
+Tank offensive class that is slow and resistant. 
 
-The compiled game is located in a sub-folder of `build`. You can run the client from there with `./teeworlds` and the server with `./teeworlds_srv`.
+He spawns with all armor and health.  
 
+Tank is basicly hevyier and slower. 
 
-Build options
--------------
+https://user-images.githubusercontent.com/46483193/165517450-43697393-674b-4903-80de-e1f4453c1a02.mp4
 
-One of the following targets can be added to the `bam` command line: `game` (default), `server`, `client`, `content`, `masterserver`, `tools`.
+Tank also gets 2 times less damage. 
 
-The following options can also be added.
+https://user-images.githubusercontent.com/46483193/165515872-43546540-cf14-4760-8f95-efcf1324a3f5.mp4
 
-`conf=release` to build in release mode (defaults to `conf=debug`).
+His pistol is replaced with maschine gun. 
 
-`arch=x86` or `arch=x86_64` to force select an architecture.
+https://user-images.githubusercontent.com/46483193/165515793-dd436d0b-5b20-4178-8943-159fba257d91.mp4
 
-Building on Windows with Visual Studio & CMake
-======================
+ </details>
 
-Download and install some version of [Microsoft Visual
-Studio](https://www.visualstudio.com/) (as of writing, MSVS Community 2019)
-with the following components:
+----------
 
-* Desktop development with C++ (on the main page)
-* Python development (on the main page)
-* Git for Windows (in Individual Components → Code tools)
+<details>
+ <summary><h1> Hunter </h1></summary>
+Hunter special abitlity is turning invisable using ninja. 
 
-Run Visual Studio. Open the Team Explorer (View → Team Explorer, Ctrl+^,
-Ctrl+M). Click Clone (in the Team Explorer, Connect → Local Git Repositories).
-Enter `https://github.com/teeworlds/teeworlds` into the first input box. Wait
-for the download to complete (terminals might pop up).
+Upon spawning as hunter you can (by scrolling mouse wheel) select ninja weapon. 
+ 
+ By using ninja you become invisible for some time (which is shown as duration of ninja). If it reaches 0 you will have to wait until it recharges to full to use invisibility again. Your teammates can see you. 
+ 
+When you are invisible you can turn visible again by using ninja again. This is the only way to become visible without having to wait until cooldown fill up. 
+<!-- Example video -->
 
-Wait until the CMake configuration is done (watch the Output windows at the
-bottom).
+After turning invisable you can switch to any weapon and walk and hook to walls. But if you shoot anywheare or hook anyone or will be hooked by player from other team you will become visible again and will have to wait until ninja recharges to full. 
+ 
+<!-- Example video -->
 
-Select `teeworlds.exe` in the Select Startup Item… combobox next to the green
-arrow. Wait for the compilation to finish.
+Also if you get too close to anyone you will be revealed too. 
+<!-- Example video -->
 
-For subsequent builds you only have to click the button with the green arrow
-again.
+If you are invisable, hutner from other team can see you if he becomes invisable too. 
+<!-- Example video of changing weapon and hooking and getting revealed in the end -->
 
-Building on Windows with MSVC build tools & bam
-======================
+There are 2 specific sounds (and they are loud) that inform player and other players:
+ 
+1. Sound of getting invisable
 
-Download and install [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) and [Python](https://www.python.org/downloads/).
+https://user-images.githubusercontent.com/46483193/166137408-a584956f-84e5-4180-befb-171d4953662f.mp4
 
-Download and unzip [Teeworlds stable sources](https://github.com/teeworlds/teeworlds/releases) or [Teeworlds latest sources](https://github.com/teeworlds/teeworlds/archive/master.zip).
+2. Sound of getting revealed
+ 
+https://user-images.githubusercontent.com/46483193/166137411-74b4c4fb-e138-4a8e-ba0b-bc9c1a36853d.mp4
 
-Download and unzip [bam](https://github.com/matricks/bam/archive/v0.5.1.tar.gz) to `teeworlds-version\bam`.
+ </details>
 
-Run the `x64 Native Tools Command Prompt` (or `x86` for 32-bit) from the start menu.
+----------
 
-    # Navigate to the Teeworlds source directory
-    cd ...\teeworlds-version
-    
-    # Build bam (use make_win32_msvc.bat for 32-bit)
-    cd bam
-    make_win64_msvc.bat
-    copy bam ..
-    cd ..
-    
-    # Build Teeworlds
-    bam conf=release
+<details>
+ <summary><h1> Medic </h1></summary>
+Medic implementation is WIP(work in progress) by now it works as vanilla. 
 
-Use `conf=debug` to build the debug version instead. You can also provide a target after the `bam` command : `game` (default), `server`, `client`, `content`, `masterserver`, `tools`.
+ </details>
+ 
+----------
 
-Building on Windows with MinGW & CMake
-======================
+<details>
+ <summary><h1> Armorer </h1></summary>
+Armorer implementation is WIP(work in progress) by now it works as vanilla. 
 
-Download and install MinGW with at least the following components:
+ </details>
+ 
+----------
 
-- mingw-developer-toolkit-bin
-- mingw32-base-bin
-- mingw32-gcc-g++-bin
-- msys-base-bin
+## About my future plans:
+My inital idea of modyfing teeworlds was as I said to force players to cooperate. My first attempt was to use other mod wich implemented [zombies](https://github.com/LordSk/teeworlds/tree/mod/zomb), and transform the game coopeative adventure platformer. Players would need to fight their way through the very long map while fighting numerous zombies.
 
-Also install [Git](https://git-scm.com/downloads) (for downloading the source
-code), [Python](https://www.python.org/downloads/) and
-[CMake](https://cmake.org/download/).
+# Let's keep Teamworlds alive!
 
-Open CMake ("CMake (cmake-gui)" in the start menu). Click "Browse Source"
-(first line) and select the directory with the Teeworlds source code. Next,
-click "Browse Build" and create a subdirectory for the build (e.g. called
-"build"). Then click "Configure". Select "MinGW Makefiles" as the generator and
-click "Finish". Wait a bit (until the progress bar is full). Then click
-"Generate".
-
-You can now build Teeworlds by executing `mingw32-make` in the build directory.
+I want this project to be alive. If you spot any bug, have a game-balancing issue or have a feature request, please don't hesitate and write an issue! If you want to get your hands dirty and write a code, I may even help you with that.
+`
