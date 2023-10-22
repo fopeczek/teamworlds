@@ -1,3 +1,5 @@
+/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
+/* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include <gtest/gtest.h>
 
 #include <base/system.h>
@@ -24,6 +26,7 @@ TEST(Thread, Wait)
 	void *pThread = thread_init(SetToOne, &Integer);
 	thread_wait(pThread);
 	EXPECT_EQ(Integer, 1);
+	thread_destroy(pThread);
 }
 
 TEST(Thread, Yield)
@@ -45,4 +48,5 @@ TEST(Thread, Lock)
 	void *pThread = thread_init(LockThread, &Lock);
 	lock_unlock(Lock);
 	thread_wait(pThread);
+	thread_destroy(pThread);
 }

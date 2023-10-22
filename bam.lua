@@ -20,11 +20,16 @@ generated_icon_dir = "build/icons"
 builddir = "build/%(arch)s/%(conf)s"
 content_src_dir = "datasrc/"
 
+python_in_path = ExecuteSilent("python -V") == 0
+
 -- data compiler
 function Python(name)
 	if family == "windows" then
-		-- Python is usually registered for .py files in Windows
-		return str_replace(name, "/", "\\")
+		name = str_replace(name, "/", "\\")
+		if not python_in_path then
+			-- Python is usually registered for .py files in Windows
+			return name
+		end
 	end
 	return "python " .. name
 end
@@ -103,7 +108,7 @@ function GenerateCommonSettings(settings, conf, arch, compiler)
 	libs = {zlib=zlib, wavpack=wavpack, png=png, md5=md5, json=json}
 end
 
-function GenerateMacOSXSettings(settings, conf, arch, compiler)
+function GenerateMacOSSettings(settings, conf, arch, compiler)
 	if arch == "x86" then
 		settings.cc.flags:Add("-arch i386")
 		settings.link.flags:Add("-arch i386")
@@ -140,7 +145,7 @@ function GenerateMacOSXSettings(settings, conf, arch, compiler)
 	GenerateCommonSettings(settings, conf, arch, compiler)
 
 	-- Build server launcher before adding game stuff
-	local serverlaunch = Link(settings, "serverlaunch", Compile(settings, "src/osxlaunch/server.m"))
+	local serverlaunch = Link(settings, "serverlaunch", Compile(settings, "src/macoslaunch/server.m"))
 
 	-- Master server, version server and tools
 	BuildEngineCommon(settings)
@@ -161,7 +166,7 @@ function GenerateMacOSXSettings(settings, conf, arch, compiler)
 	settings.link.frameworks:Add("AGL")
 	-- FIXME: the SDL config is applied in BuildClient too but is needed here before so the launcher will compile
 	config.sdl:Apply(settings)
-	settings.link.extrafiles:Merge(Compile(settings, "src/osxlaunch/client.m"))
+	settings.link.extrafiles:Merge(Compile(settings, "src/macoslaunch/client.m"))
 	BuildClient(settings)
 
 	-- Content
@@ -203,7 +208,6 @@ function GenerateLinuxSettings(settings, conf, arch, compiler)
 	-- Client
 	settings.link.libs:Add("X11")
 	settings.link.libs:Add("GL")
-	settings.link.libs:Add("GLU")
 	BuildClient(settings)
 
 	-- Content
@@ -236,6 +240,10 @@ function GenerateWindowsSettings(settings, conf, target_arch, compiler)
 		settings.cc.defines:Add("_WIN32_WINNT=0x0501")
 	end
 
+	-- Unicode support
+	settings.cc.defines:Add("UNICODE") -- Windows headers
+	settings.cc.defines:Add("_UNICODE") -- C-runtime
+
 	local icons = SharedIcons(compiler)
 	local manifests = SharedManifests(compiler)
 
@@ -267,8 +275,8 @@ function GenerateWindowsSettings(settings, conf, target_arch, compiler)
 	settings.link.extrafiles:Add(icons.client)
 	settings.link.extrafiles:Add(manifests.client)
 	settings.link.libs:Add("opengl32")
-	settings.link.libs:Add("glu32")
 	settings.link.libs:Add("winmm")
+	settings.link.libs:Add("imm32")
 	BuildClient(settings)
 
 	-- Content
@@ -382,7 +390,7 @@ end
 
 function BuildContent(settings, arch, conf)
 	local content = {}
-	table.insert(content, CopyToDir(settings.link.Output(settings, "data"), CollectRecursive(content_src_dir .. "*.png", content_src_dir .. "*.wv", content_src_dir .. "*.ttf", content_src_dir .. "*.txt", content_src_dir .. "*.map", content_src_dir .. "*.rules", content_src_dir .. "*.json")))
+	table.insert(content, CopyToDir(settings.link.Output(settings, "data"), CollectRecursive(content_src_dir .. "*.png", content_src_dir .. "*.wv", content_src_dir .. "*.ttc", content_src_dir .. "*.ttf", content_src_dir .. "*.txt", content_src_dir .. "*.map", content_src_dir .. "*.rules", content_src_dir .. "*.json")))
 	if family == "windows" then
 		if arch == "x86_64" then
 			_arch = "64"
@@ -391,8 +399,11 @@ function BuildContent(settings, arch, conf)
 		end
 		-- dependencies
 		dl = Python("scripts/download.py")
-		AddJob("other/sdl/include/SDL.h", "Downloading SDL2", dl .. " sdl")
-		AddJob("other/freetype/include/ft2build.h", "Downloading freetype", dl .. " freetype")
+		AddJob({
+				"other/freetype/include/ft2build.h", "other/freetype/windows/lib" .. _arch .. "/freetype.dll",
+				"other/sdl/include/SDL.h", "other/sdl/windows/lib" .. _arch .. "/SDL2.dll"
+			}, "Downloading freetype and SDL2", dl .. " freetype sdl"
+		)
 		table.insert(content, CopyFile(settings.link.Output(settings, "") .. "/SDL2.dll", "other/sdl/windows/lib" .. _arch .. "/SDL2.dll"))
 		table.insert(content, CopyFile(settings.link.Output(settings, "") .. "/freetype.dll", "other/freetype/windows/lib" .. _arch .. "/freetype.dll"))
 		AddDependency(settings.link.Output(settings, "") .. "/SDL2.dll", "other/sdl/include/SDL.h")
@@ -402,7 +413,7 @@ function BuildContent(settings, arch, conf)
 end
 
 -- create all targets for specified configuration & architecture
-function GenerateSettings(conf, arch, builddir, compiler)
+function GenerateSettings(conf, arch, builddir, compiler, headless)
 	local settings = NewSettings()
 
 	-- Set compiler if explicitly requested
@@ -418,7 +429,7 @@ function GenerateSettings(conf, arch, builddir, compiler)
 		compiler = config.compiler.driver
 	end
 	
-	if conf ==  "debug" then
+	if conf == "debug" then
 		settings.debug = 1
 		settings.optimize = 0
 		settings.cc.defines:Add("CONF_DEBUG")
@@ -426,6 +437,10 @@ function GenerateSettings(conf, arch, builddir, compiler)
 		settings.debug = 0
 		settings.optimize = 1
 		settings.cc.defines:Add("CONF_RELEASE")
+	end
+
+	if headless == "on" then
+		settings.cc.defines:Add("CONF_HEADLESS_CLIENT")
 	end
 	
 	-- Generate object files in {builddir}/objs/
@@ -450,7 +465,7 @@ function GenerateSettings(conf, arch, builddir, compiler)
 		GenerateWindowsSettings(settings, conf, arch, compiler)
 	elseif family == "unix" then
 		if platform == "macosx" then
-			GenerateMacOSXSettings(settings, conf, arch, compiler)
+			GenerateMacOSSettings(settings, conf, arch, compiler)
 		elseif platform == "solaris" then
 			GenerateSolarisSettings(settings, conf, arch, compiler)
 		else -- Linux, BSD
@@ -512,6 +527,12 @@ if ScriptArgs['builddir'] then
 	builddir = ScriptArgs['builddir']
 end
 
+if ScriptArgs['headless'] then
+	headless = ScriptArgs['headless']
+else
+	headless = nil
+end
+
 targets = {client="teeworlds", server="teeworlds_srv",
            versionserver="versionsrv", masterserver="mastersrv",
            tools="pseudo_tools", content="content"}
@@ -523,7 +544,7 @@ end
 for a, cur_arch in ipairs(archs) do
 	for c, cur_conf in ipairs(confs) do
 		cur_builddir = interp(builddir, {platform=family, arch=cur_arch, target=cur_target, conf=cur_conf, compiler=compiler})
-		local settings = GenerateSettings(cur_conf, cur_arch, cur_builddir, compiler)
+		local settings = GenerateSettings(cur_conf, cur_arch, cur_builddir, compiler, headless)
 		for t, cur_target in pairs(targets) do
 			table.insert(subtargets[cur_target], PathJoin(cur_builddir, cur_target .. settings.link.extension))
 		end

@@ -7,17 +7,19 @@
 #include <engine/console.h>
 #include <engine/graphics.h>
 #include <engine/textrender.h>
+#include <engine/storage.h>
 
 #include <generated/client_data.h>
 #include <game/client/localization.h>
 #include <game/client/render.h>
 #include "editor.h"
 
+const char *pDefaultLayerName = "Tiles";
 
 CLayerTiles::CLayerTiles(int w, int h)
 {
 	m_Type = LAYERTYPE_TILES;
-	str_copy(m_aName, "Tiles", sizeof(m_aName));
+	str_copy(m_aName, pDefaultLayerName, sizeof(m_aName));
 	m_Width = w;
 	m_Height = h;
 	m_Image = -1;
@@ -216,7 +218,7 @@ void CLayerTiles::Clamp(RECTi *pRect)
 
 void CLayerTiles::BrushSelecting(CUIRect Rect)
 {
-	vec4 FillColor = HexToRgba(g_Config.m_EdColorSelectionTile);
+	vec4 FillColor = HexToRgba(m_pEditor->Config()->m_EdColorSelectionTile);
 
 	Graphics()->TextureClear();
 	m_pEditor->Graphics()->QuadsBegin();
@@ -227,7 +229,11 @@ void CLayerTiles::BrushSelecting(CUIRect Rect)
 	m_pEditor->Graphics()->QuadsEnd();
 	char aBuf[16];
 	str_format(aBuf, sizeof(aBuf), "%d,%d", ConvertX(Rect.w), ConvertY(Rect.h));
-	TextRender()->Text(0, Rect.x+3.0f, Rect.y+3.0f, m_pEditor->m_ShowTilePicker?15.0f:15.0f*m_pEditor->m_WorldZoom, aBuf, -1.0f);
+	static CTextCursor s_Cursor;
+	s_Cursor.m_FontSize = m_pEditor->m_ShowTilePicker?15.0f:15.0f*m_pEditor->m_WorldZoom;
+	s_Cursor.MoveTo(Rect.x+3.0f, Rect.y+3.0f);
+	s_Cursor.Reset();
+	TextRender()->TextOutlined(&s_Cursor, aBuf, -1);
 }
 
 static int s_lastBrushX = -1, s_lastBrushY = -1;
@@ -418,8 +424,8 @@ void CLayerTiles::Resize(int NewW, int NewH)
 	mem_zero(pNewData, NewW*NewH*sizeof(CTile));
 
 	// copy old data
-	for(int y = 0; y < min(NewH, m_Height); y++)
-		mem_copy(&pNewData[y*NewW], &m_pTiles[y*m_Width], min(m_Width, NewW)*sizeof(CTile));
+	for(int y = 0; y < minimum(NewH, m_Height); y++)
+		mem_copy(&pNewData[y*NewW], &m_pTiles[y*m_Width], minimum(m_Width, NewW)*sizeof(CTile));
 
 	// replace old
 	delete [] m_pTiles;
@@ -469,13 +475,14 @@ void CLayerTiles::ShowInfo()
 {
 	float ScreenX0, ScreenY0, ScreenX1, ScreenY1;
 	Graphics()->GetScreen(&ScreenX0, &ScreenY0, &ScreenX1, &ScreenY1);
-	Graphics()->TextureSet(m_pEditor->Client()->GetDebugFont());
+	static IGraphics::CTextureHandle s_Font = Graphics()->LoadTexture("ui/debug_font.png", IStorage::TYPE_ALL, CImageInfo::FORMAT_AUTO, IGraphics::TEXLOAD_NORESAMPLE);
+	Graphics()->TextureSet(s_Font);
 	Graphics()->QuadsBegin();
 
-	int StartY = max(0, (int)(ScreenY0/32.0f)-1);
-	int StartX = max(0, (int)(ScreenX0/32.0f)-1);
-	int EndY = min((int)(ScreenY1/32.0f)+1, m_Height);
-	int EndX = min((int)(ScreenX1/32.0f)+1, m_Width);
+	int StartY = maximum(0, (int)(ScreenY0/32.0f)-1);
+	int StartX = maximum(0, (int)(ScreenX0/32.0f)-1);
+	int EndY = minimum((int)(ScreenY1/32.0f)+1, m_Height);
+	int EndX = minimum((int)(ScreenX1/32.0f)+1, m_Width);
 
 	for(int y = StartY; y < EndY; y++)
 		for(int x = StartX; x < EndX; x++)
@@ -483,7 +490,7 @@ void CLayerTiles::ShowInfo()
 			int c = x + y*m_Width;
 			if(m_pTiles[c].m_Index)
 			{
-				char aBuf[64];
+				char aBuf[32];
 				str_format(aBuf, sizeof(aBuf), "%i", m_pTiles[c].m_Index);
 				m_pEditor->Graphics()->QuadsText(x*32, y*32, 16.0f, aBuf);
 
@@ -492,20 +499,28 @@ void CLayerTiles::ShowInfo()
 									m_pTiles[c].m_Flags&TILEFLAG_ROTATE? 'R' : ' ',
 									0};
 				m_pEditor->Graphics()->QuadsText(x*32, y*32+16, 16.0f, aFlags);
+
+				// TODO: Use text render instead, once it's optimized enough for this much text at once, and remove usage of debug font here
+				/*str_format(aBuf, sizeof(aBuf),
+					"%i\n%c%c%c", m_pTiles[c].m_Index,
+						m_pTiles[c].m_Flags&TILEFLAG_VFLIP ? 'V' : ' ',
+						m_pTiles[c].m_Flags&TILEFLAG_HFLIP ? 'H' : ' ',
+						m_pTiles[c].m_Flags&TILEFLAG_ROTATE? 'R' : ' ');
+				TextRender()->Text(0, x*32+4, y*32+4, 10.0f, aBuf, 32.0f);*/
 			}
 			x += m_pTiles[c].m_Skip;
 		}
 
 	Graphics()->QuadsEnd();
-	Graphics()->MapScreen(ScreenX0, ScreenY0, ScreenX1, ScreenY1);
 }
 
 int CLayerTiles::RenderProperties(CUIRect *pToolBox)
 {
 	CUIRect Button;
 
+	bool IsGameLayer = m_pEditor->m_Map.m_pGameLayer == this;
 	bool InGameGroup = !find_linear(m_pEditor->m_Map.m_pGameGroup->m_lLayers.all(), this).empty();
-	if(m_pEditor->m_Map.m_pGameLayer != this)
+	if(!IsGameLayer)
 	{
 		if(m_Image >= 0 && m_Image < m_pEditor->m_Map.m_lImages.size() && m_pEditor->m_Map.m_lImages[m_Image]->m_pAutoMapper)
 		{
@@ -543,8 +558,8 @@ int CLayerTiles::RenderProperties(CUIRect *pToolBox)
 		if(Result > -1)
 		{
 			CLayerTiles *gl = m_pEditor->m_Map.m_pGameLayer;
-			int w = min(gl->m_Width, m_Width);
-			int h = min(gl->m_Height, m_Height);
+			int w = minimum(gl->m_Width, m_Width);
+			int h = minimum(gl->m_Height, m_Height);
 			for(int y = 0; y < h; y++)
 				for(int x = 0; x < w; x++)
 					if(m_pTiles[y*m_Width+x].m_Index)
@@ -583,7 +598,7 @@ int CLayerTiles::RenderProperties(CUIRect *pToolBox)
 		{0},
 	};
 
-	if(m_pEditor->m_Map.m_pGameLayer == this) // remove the image and color properties if this is the game layer
+	if(IsGameLayer) // remove the image and color properties if this is the game layer
 	{
 		aProps[3].m_pName = 0;
 		aProps[4].m_pName = 0;
@@ -610,9 +625,12 @@ int CLayerTiles::RenderProperties(CUIRect *pToolBox)
 		}
 		else
 		{
+			bool HasNameOfOldImage = m_Image != -1 && str_comp(m_aName, m_pEditor->m_Map.m_lImages[m_Image]->m_aName) == 0;
 			m_Image = NewVal%m_pEditor->m_Map.m_lImages.size();
 			m_SelectedRuleSet = 0;
 			m_LiveAutoMap = false;
+			if(str_comp(m_aName, pDefaultLayerName) == 0 || HasNameOfOldImage)
+				str_copy(m_aName, m_pEditor->m_Map.m_lImages[m_Image]->m_aName, sizeof(m_aName));
 		}
 	}
 	else if(Prop == PROP_COLOR)

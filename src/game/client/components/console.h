@@ -21,21 +21,21 @@ class CGameConsole : public CComponent
 		TStaticRingBuffer<char, 64*1024, CRingBufferBase::FLAG_RECYCLE> m_History;
 		char *m_pHistoryEntry;
 
+		char m_aInputBuf[256];
 		CLineInput m_Input;
+		const char *m_pName;
 		int m_Type;
 		int m_BacklogActPage;
 
 		CGameConsole *m_pGameConsole;
 
-		char m_aCompletionMapBuffer[128];
-		int m_CompletionMapChosen;
-		int m_CompletionMapEnumerationCount;
-
 		char m_aCompletionBuffer[128];
 		int m_CompletionChosen;
+		char m_aCompletionBufferArgument[128];
+		int m_CompletionChosenArgument;
 		int m_CompletionFlagmask;
-		int m_CompletionEnumerationCount;
 		float m_CompletionRenderOffset;
+		float m_CompletionRenderOffsetChange;
 
 		bool m_IsCommand;
 		char m_aCommandName[IConsole::TEMPCMD_NAME_LENGTH];
@@ -47,7 +47,7 @@ class CGameConsole : public CComponent
 
 		void ClearBacklog();
 		void ClearHistory();
-		void Reset() { m_CompletionRenderOffset = 0; }
+		void Reset() { m_CompletionRenderOffset = 0.0f; m_CompletionRenderOffsetChange = 0.0f; }
 
 		void ExecuteLine(const char *pLine);
 
@@ -55,8 +55,8 @@ class CGameConsole : public CComponent
 		void PrintLine(const char *pLine, bool Highlighted);
 
 		const char *GetString() const { return m_Input.GetString(); }
-		static void PossibleCommandsCompleteCallback(const char *pStr, void *pUser);
-		static void PossibleMapsCompleteCallback(const char *pStr, void *pUser);
+		static void PossibleCommandsCompleteCallback(int Index, const char *pStr, void *pUser);
+		static void PossibleArgumentsCompleteCallback(int Index, const char *pStr, void *pUser);
 	};
 
 	class IConsole *m_pConsole;
@@ -76,7 +76,7 @@ class CGameConsole : public CComponent
 	void Toggle(int Type);
 	void Dump(int Type);
 
-	static void PossibleCommandsRenderCallback(const char *pStr, void *pUser);
+	static void PossibleCommandsRenderCallback(int Index, const char *pStr, void *pUser);
 	static void ClientConsolePrintCallback(const char *pStr, void *pUserData, bool Highlighted);
 	static void ConToggleLocalConsole(IConsole::IResult *pResult, void *pUserData);
 	static void ConToggleRemoteConsole(IConsole::IResult *pResult, void *pUserData);
@@ -84,6 +84,10 @@ class CGameConsole : public CComponent
 	static void ConClearRemoteConsole(IConsole::IResult *pResult, void *pUserData);
 	static void ConDumpLocalConsole(IConsole::IResult *pResult, void *pUserData);
 	static void ConDumpRemoteConsole(IConsole::IResult *pResult, void *pUserData);
+#ifdef CONF_DEBUG
+	static void DumpCommandsCallback(int Index, const char *pStr, void *pUser);
+	static void ConDumpCommands(IConsole::IResult *pResult, void *pUserData);
+#endif
 	static void ConchainConsoleOutputLevelUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 
 public:
@@ -102,7 +106,6 @@ public:
 	virtual void OnConsoleInit();
 	virtual void OnReset();
 	virtual void OnRender();
-	virtual void OnMessage(int MsgType, void *pRawMsg);
 	virtual bool OnInput(IInput::CEvent Events);
 };
 #endif

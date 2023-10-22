@@ -40,7 +40,8 @@ void CControls::OnRelease()
 
 void CControls::OnPlayerDeath()
 {
-	m_LastData.m_WantedWeapon = m_InputData.m_WantedWeapon = 0;
+	if(!m_pClient->m_Snap.m_pGameDataRace || !(m_pClient->m_Snap.m_pGameDataRace->m_RaceFlags&RACEFLAG_KEEP_WANTED_WEAPON))
+		m_LastData.m_WantedWeapon = m_InputData.m_WantedWeapon = 0;
 }
 
 static void ConKeyInputState(IConsole::IResult *pResult, void *pUserData)
@@ -101,14 +102,14 @@ void CControls::OnMessage(int Msg, void *pRawMsg)
 	if(Msg == NETMSGTYPE_SV_WEAPONPICKUP)
 	{
 		CNetMsg_Sv_WeaponPickup *pMsg = (CNetMsg_Sv_WeaponPickup *)pRawMsg;
-		if(g_Config.m_ClAutoswitchWeapons)
+		if(Config()->m_ClAutoswitchWeapons)
 			m_InputData.m_WantedWeapon = pMsg->m_Weapon+1;
 	}
 }
 
 int CControls::SnapInput(int *pData)
 {
-	static int64 LastSendTime = 0;
+	static int64 s_LastSendTime = 0;
 	bool Send = false;
 
 	// update player state
@@ -117,7 +118,7 @@ int CControls::SnapInput(int *pData)
 	else
 		m_InputData.m_PlayerFlags = 0;
 
-	if(m_pClient->m_pScoreboard->Active())
+	if(m_pClient->m_pScoreboard->IsActive())
 		m_InputData.m_PlayerFlags |= PLAYERFLAG_SCOREBOARD;
 
 	if(m_LastData.m_PlayerFlags != m_InputData.m_PlayerFlags)
@@ -133,12 +134,11 @@ int CControls::SnapInput(int *pData)
 		mem_copy(pData, &m_InputData, sizeof(m_InputData));
 
 		// send once a second just to be sure
-		if(time_get() > LastSendTime + time_freq())
+		if(time_get() > s_LastSendTime + time_freq())
 			Send = true;
 	}
 	else
 	{
-		ClampMousePos();
 		m_InputData.m_TargetX = (int)m_MousePos.x;
 		m_InputData.m_TargetY = (int)m_MousePos.y;
 		if(!m_InputData.m_TargetX && !m_InputData.m_TargetY)
@@ -155,7 +155,8 @@ int CControls::SnapInput(int *pData)
 			m_InputData.m_Direction = 1;
 
 		// stress testing
-		if(g_Config.m_DbgStress)
+#ifdef CONF_DEBUG
+		if(Config()->m_DbgStress)
 		{
 			float t = Client()->LocalTime();
 			mem_zero(&m_InputData, sizeof(m_InputData));
@@ -168,6 +169,7 @@ int CControls::SnapInput(int *pData)
 			m_InputData.m_TargetX = (int)(sinf(t*3)*100.0f);
 			m_InputData.m_TargetY = (int)(cosf(t*3)*100.0f);
 		}
+#endif
 
 		// check if we need to send input
 		if(m_InputData.m_Direction != m_LastData.m_Direction) Send = true;
@@ -179,7 +181,7 @@ int CControls::SnapInput(int *pData)
 		else if(m_InputData.m_PrevWeapon != m_LastData.m_PrevWeapon) Send = true;
 
 		// send at at least 10hz
-		if(time_get() > LastSendTime + time_freq()/25)
+		if(time_get() > s_LastSendTime + time_freq()/25)
 			Send = true;
 	}
 
@@ -189,7 +191,7 @@ int CControls::SnapInput(int *pData)
 	if(!Send)
 		return 0;
 
-	LastSendTime = time_get();
+	s_LastSendTime = time_get();
 	mem_copy(pData, &m_InputData, sizeof(m_InputData));
 	return sizeof(m_InputData);
 }
@@ -207,14 +209,34 @@ void CControls::OnRender()
 		m_TargetPos = m_MousePos;
 }
 
-bool CControls::OnMouseMove(float x, float y)
+bool CControls::OnCursorMove(float x, float y, int CursorType)
 {
-	if((m_pClient->m_Snap.m_pGameData && m_pClient->m_Snap.m_pGameData->m_GameStateFlags&(GAMESTATEFLAG_PAUSED|GAMESTATEFLAG_ROUNDOVER|GAMESTATEFLAG_GAMEOVER)) ||
-		(m_pClient->m_Snap.m_SpecInfo.m_Active && m_pClient->m_pChat->IsActive()))
+	if(m_pClient->IsWorldPaused() || (m_pClient->m_Snap.m_SpecInfo.m_Active && m_pClient->m_pChat->IsActive()))
 		return false;
 
-	m_MousePos += vec2(x, y); // TODO: ugly
+	if(CursorType == IInput::CURSOR_JOYSTICK
+		&& Config()->m_JoystickAbsolute
+		&& m_pClient->m_Snap.m_pGameData
+		&& !m_pClient->m_Snap.m_SpecInfo.m_Active)
+	{
+		float AbsX = 0.0f, AbsY = 0.0f;
+		if(Input()->GetActiveJoystick()->Absolute(&AbsX, &AbsY))
+			m_MousePos = vec2(AbsX, AbsY) * GetMaxMouseDistance();
+		return true;
+	}
 
+	float Factor = 1.0f;
+	switch(CursorType)
+	{
+		case IInput::CURSOR_MOUSE:
+			Factor = Config()->m_InpMousesens/100.0f;
+			break;
+		case IInput::CURSOR_JOYSTICK:
+			Factor = Config()->m_JoystickSens/100.0f;
+			break;
+	}
+
+	m_MousePos += vec2(x, y) * Factor;
 	return true;
 }
 
@@ -227,17 +249,20 @@ void CControls::ClampMousePos()
 	}
 	else
 	{
-		float MouseMax;
-		if(g_Config.m_ClDynamicCamera)
-		{
-			float CameraMaxDistance = 200.0f;
-			float FollowFactor = g_Config.m_ClMouseFollowfactor/100.0f;
-			MouseMax = min(CameraMaxDistance/FollowFactor + g_Config.m_ClMouseDeadzone, (float)g_Config.m_ClMouseMaxDistanceDynamic);
-		}
-		else
-			MouseMax = (float)g_Config.m_ClMouseMaxDistanceStatic;
-
-		if(length(m_MousePos) > MouseMax)
-			m_MousePos = normalize(m_MousePos)*MouseMax;
+		const float MouseMax = GetMaxMouseDistance();
+		if(dot(m_MousePos, m_MousePos) > MouseMax * MouseMax)
+			m_MousePos = normalize(m_MousePos) * MouseMax;
 	}
+}
+
+float CControls::GetMaxMouseDistance() const
+{
+	if(Config()->m_ClDynamicCamera)
+	{
+		float CameraMaxDistance = 200.0f;
+		float FollowFactor = Config()->m_ClMouseFollowfactor/100.0f;
+		return minimum(CameraMaxDistance/FollowFactor + Config()->m_ClMouseDeadzone, (float)Config()->m_ClMouseMaxDistanceDynamic);
+	}
+	else
+		return (float)Config()->m_ClMouseMaxDistanceStatic;
 }

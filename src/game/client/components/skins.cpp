@@ -1,29 +1,27 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
-#include <math.h>
-
 #include <base/color.h>
-#include <base/system.h>
 #include <base/math.h>
+#include <base/system.h>
 
 #include <engine/graphics.h>
 #include <engine/storage.h>
 #include <engine/external/json-parser/json.h>
 #include <engine/shared/config.h>
+#include <engine/shared/jsonwriter.h>
 
+#include "menus.h"
 #include "skins.h"
 
 
 const char * const CSkins::ms_apSkinPartNames[NUM_SKINPARTS] = {"body", "marking", "decoration", "hands", "feet", "eyes"}; /* Localize("body","skins");Localize("marking","skins");Localize("decoration","skins");Localize("hands","skins");Localize("feet","skins");Localize("eyes","skins"); */
 const char * const CSkins::ms_apColorComponents[NUM_COLOR_COMPONENTS] = {"hue", "sat", "lgt", "alp"};
 
-char *const CSkins::ms_apSkinVariables[NUM_SKINPARTS] = {g_Config.m_PlayerSkinBody, g_Config.m_PlayerSkinMarking, g_Config.m_PlayerSkinDecoration,
-													g_Config.m_PlayerSkinHands, g_Config.m_PlayerSkinFeet, g_Config.m_PlayerSkinEyes};
-int *const CSkins::ms_apUCCVariables[NUM_SKINPARTS] = {&g_Config.m_PlayerUseCustomColorBody, &g_Config.m_PlayerUseCustomColorMarking, &g_Config.m_PlayerUseCustomColorDecoration,
-													&g_Config.m_PlayerUseCustomColorHands, &g_Config.m_PlayerUseCustomColorFeet, &g_Config.m_PlayerUseCustomColorEyes};
-int *const CSkins::ms_apColorVariables[NUM_SKINPARTS] = {&g_Config.m_PlayerColorBody, &g_Config.m_PlayerColorMarking, &g_Config.m_PlayerColorDecoration,
-													&g_Config.m_PlayerColorHands, &g_Config.m_PlayerColorFeet, &g_Config.m_PlayerColorEyes};
+char *CSkins::ms_apSkinVariables[NUM_SKINPARTS] = {0};
+int *CSkins::ms_apUCCVariables[NUM_SKINPARTS] = {0};
+int *CSkins::ms_apColorVariables[NUM_SKINPARTS] = {0};
 
+const float MIN_EYE_BODY_COLOR_DIST = 80.f; // between body and eyes (LAB color space)
 
 int CSkins::SkinPartScan(const char *pName, int IsDir, int DirType, void *pUser)
 {
@@ -31,7 +29,22 @@ int CSkins::SkinPartScan(const char *pName, int IsDir, int DirType, void *pUser)
 	if(IsDir || !str_endswith(pName, ".png"))
 		return 0;
 
-	char aBuf[512];
+	int PartNameSize, PartNameCount;
+	str_utf8_stats(pName, str_length(pName) - str_length(".png") + 1, IO_MAX_PATH_LENGTH, &PartNameSize, &PartNameCount);
+	if(PartNameSize >= MAX_SKIN_ARRAY_SIZE || PartNameCount > MAX_SKIN_LENGTH)
+	{
+		char aBuf[IO_MAX_PATH_LENGTH + 64];
+		str_format(aBuf, sizeof(aBuf), "failed to load skin part '%s': name too long", pName);
+		pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "skins", aBuf);
+		return 0;
+	}
+
+	CSkinPart Part;
+	str_copy(Part.m_aName, pName, minimum<int>(PartNameSize + 1, sizeof(Part.m_aName)));
+	if(pSelf->FindSkinPart(pSelf->m_ScanningPart, Part.m_aName, true) != -1)
+		return 0;
+
+	char aBuf[IO_MAX_PATH_LENGTH];
 	str_format(aBuf, sizeof(aBuf), "skins/%s/%s", CSkins::ms_apSkinPartNames[pSelf->m_ScanningPart], pName);
 	CImageInfo Info;
 	if(!pSelf->Graphics()->LoadPNG(&Info, aBuf, DirType))
@@ -40,17 +53,23 @@ int CSkins::SkinPartScan(const char *pName, int IsDir, int DirType, void *pUser)
 		pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "skins", aBuf);
 		return 0;
 	}
+	if(Info.m_Format != CImageInfo::FORMAT_RGBA)
+	{
+		str_format(aBuf, sizeof(aBuf), "failed to load skin part '%s': must be RGBA format", pName);
+		pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "skins", aBuf);
+		return 0;
+	}
 
-	CSkinPart Part;
 	Part.m_OrgTexture = pSelf->Graphics()->LoadTextureRaw(Info.m_Width, Info.m_Height, Info.m_Format, Info.m_pData, Info.m_Format, 0);
 	Part.m_BloodColor = vec3(1.0f, 1.0f, 1.0f);
 
-	unsigned char *d = (unsigned char *)Info.m_pData;
-	int Pitch = Info.m_Width*4;
+	const int Step = Info.GetPixelSize();
+	unsigned char *pData = (unsigned char *)Info.m_pData;
 
 	// dig out blood color
 	if(pSelf->m_ScanningPart == SKINPART_BODY)
 	{
+		int Pitch = Info.m_Width * Step;
 		int PartX = Info.m_Width/2;
 		int PartY = 0;
 		int PartWidth = Info.m_Width/2;
@@ -59,28 +78,20 @@ int CSkins::SkinPartScan(const char *pName, int IsDir, int DirType, void *pUser)
 		int aColors[3] = {0};
 		for(int y = PartY; y < PartY+PartHeight; y++)
 			for(int x = PartX; x < PartX+PartWidth; x++)
-			{
-				if(d[y*Pitch+x*4+3] > 128)
-				{
-					aColors[0] += d[y*Pitch+x*4+0];
-					aColors[1] += d[y*Pitch+x*4+1];
-					aColors[2] += d[y*Pitch+x*4+2];
-				}
-			}
+				if(pData[y*Pitch+x*Step+3] > 128)
+					for(int c = 0; c < 3; c++)
+						aColors[c] += pData[y*Pitch+x*Step+c];
 
 		Part.m_BloodColor = normalize(vec3(aColors[0], aColors[1], aColors[2]));
 	}
 
 	// create colorless version
-	int Step = Info.m_Format == CImageInfo::FORMAT_RGBA ? 4 : 3;
-
-	// make the texture gray scale
 	for(int i = 0; i < Info.m_Width*Info.m_Height; i++)
 	{
-		int v = (d[i*Step]+d[i*Step+1]+d[i*Step+2])/3;
-		d[i*Step] = v;
-		d[i*Step+1] = v;
-		d[i*Step+2] = v;
+		const int Average = (pData[i*Step]+pData[i*Step+1]+pData[i*Step+2])/3;
+		pData[i*Step] = Average;
+		pData[i*Step+1] = Average;
+		pData[i*Step+2] = Average;
 	}
 
 	Part.m_ColorTexture = pSelf->Graphics()->LoadTextureRaw(Info.m_Width, Info.m_Height, Info.m_Format, Info.m_pData, Info.m_Format, 0);
@@ -92,8 +103,7 @@ int CSkins::SkinPartScan(const char *pName, int IsDir, int DirType, void *pUser)
 		Part.m_Flags |= SKINFLAG_SPECIAL;
 	if(DirType != IStorage::TYPE_SAVE)
 		Part.m_Flags |= SKINFLAG_STANDARD;
-	str_truncate(Part.m_aName, sizeof(Part.m_aName), pName, str_length(pName) - 4);
-	if(g_Config.m_Debug)
+	if(pSelf->Config()->m_Debug)
 	{
 		str_format(aBuf, sizeof(aBuf), "load skin part %s", Part.m_aName);
 		pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "skins", aBuf);
@@ -110,20 +120,30 @@ int CSkins::SkinScan(const char *pName, int IsDir, int DirType, void *pUser)
 
 	CSkins *pSelf = (CSkins *)pUser;
 
+	int SkinNameSize, SkinNameCount;
+	str_utf8_stats(pName, str_length(pName) - str_length(".json") + 1, IO_MAX_PATH_LENGTH, &SkinNameSize, &SkinNameCount);
+	if(SkinNameSize >= MAX_SKIN_ARRAY_SIZE || SkinNameCount > MAX_SKIN_LENGTH)
+	{
+		char aBuf[IO_MAX_PATH_LENGTH + 64];
+		str_format(aBuf, sizeof(aBuf), "failed to load skin '%s': name too long", pName);
+		pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "skins", aBuf);
+		return 0;
+	}
+
 	// read file data into buffer
-	char aBuf[512];
+	char aBuf[IO_MAX_PATH_LENGTH];
 	str_format(aBuf, sizeof(aBuf), "skins/%s", pName);
 	IOHANDLE File = pSelf->Storage()->OpenFile(aBuf, IOFLAG_READ, IStorage::TYPE_ALL);
 	if(!File)
 		return 0;
 	int FileSize = (int)io_length(File);
-	char *pFileData = (char *)mem_alloc(FileSize, 1);
+	char *pFileData = (char *)mem_alloc(FileSize);
 	io_read(File, pFileData, FileSize);
 	io_close(File);
 
 	// init
 	CSkin Skin = pSelf->m_DummySkin;
-	str_truncate(Skin.m_aName, sizeof(Skin.m_aName), pName, str_length(pName) - 5);
+	str_copy(Skin.m_aName, pName, minimum<int>(SkinNameSize + 1, sizeof(Skin.m_aName)));
 	if(pSelf->Find(Skin.m_aName, true) != -1)
 		return 0;
 	bool SpecialSkin = pName[0] == 'x' && pName[1] == '_';
@@ -162,11 +182,11 @@ int CSkins::SkinScan(const char *pName, int IsDir, int DirType, void *pUser)
 
 			// use custom colors
 			bool UseCustomColors = false;
-			const json_value &rColour = rPart["custom_colors"];
-			if(rColour.type == json_string)
-			{
-				UseCustomColors = str_comp((const char *)rColour, "true") == 0;
-			}
+			const json_value &rColor = rPart["custom_colors"];
+			if(rColor.type == json_string)
+				UseCustomColors = str_comp((const char *)rColor, "true") == 0;
+			else if(rColor.type == json_boolean)
+				UseCustomColors = rColor.u.boolean;
 			Skin.m_aUseCustomColors[PartIndex] = UseCustomColors;
 
 			// color components
@@ -200,7 +220,7 @@ int CSkins::SkinScan(const char *pName, int IsDir, int DirType, void *pUser)
 	Skin.m_Flags = SpecialSkin ? SKINFLAG_SPECIAL : 0;
 	if(DirType != IStorage::TYPE_SAVE)
 		Skin.m_Flags |= SKINFLAG_STANDARD;
-	if(g_Config.m_Debug)
+	if(pSelf->Config()->m_Debug)
 	{
 		str_format(aBuf, sizeof(aBuf), "load skin %s", Skin.m_aName);
 		pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "skins", aBuf);
@@ -210,9 +230,32 @@ int CSkins::SkinScan(const char *pName, int IsDir, int DirType, void *pUser)
 	return 0;
 }
 
+int CSkins::GetInitAmount() const
+{
+	return NUM_SKINPARTS*5 + 8;
+}
 
 void CSkins::OnInit()
 {
+	ms_apSkinVariables[SKINPART_BODY] = Config()->m_PlayerSkinBody;
+	ms_apSkinVariables[SKINPART_MARKING] = Config()->m_PlayerSkinMarking;
+	ms_apSkinVariables[SKINPART_DECORATION] = Config()->m_PlayerSkinDecoration;
+	ms_apSkinVariables[SKINPART_HANDS] = Config()->m_PlayerSkinHands;
+	ms_apSkinVariables[SKINPART_FEET] = Config()->m_PlayerSkinFeet;
+	ms_apSkinVariables[SKINPART_EYES] = Config()->m_PlayerSkinEyes;
+	ms_apUCCVariables[SKINPART_BODY] = &Config()->m_PlayerUseCustomColorBody;
+	ms_apUCCVariables[SKINPART_MARKING] = &Config()->m_PlayerUseCustomColorMarking;
+	ms_apUCCVariables[SKINPART_DECORATION] = &Config()->m_PlayerUseCustomColorDecoration;
+	ms_apUCCVariables[SKINPART_HANDS] = &Config()->m_PlayerUseCustomColorHands;
+	ms_apUCCVariables[SKINPART_FEET] = &Config()->m_PlayerUseCustomColorFeet;
+	ms_apUCCVariables[SKINPART_EYES] = &Config()->m_PlayerUseCustomColorEyes;
+	ms_apColorVariables[SKINPART_BODY] = &Config()->m_PlayerColorBody;
+	ms_apColorVariables[SKINPART_MARKING] = &Config()->m_PlayerColorMarking;
+	ms_apColorVariables[SKINPART_DECORATION] = &Config()->m_PlayerColorDecoration;
+	ms_apColorVariables[SKINPART_HANDS] = &Config()->m_PlayerColorHands;
+	ms_apColorVariables[SKINPART_FEET] = &Config()->m_PlayerColorFeet;
+	ms_apColorVariables[SKINPART_EYES] = &Config()->m_PlayerColorEyes;
+
 	for(int p = 0; p < NUM_SKINPARTS; p++)
 	{
 		m_aaSkinParts[p].clear();
@@ -242,6 +285,8 @@ void CSkins::OnInit()
 			DummySkinPart.m_BloodColor = vec3(1.0f, 1.0f, 1.0f);
 			m_aaSkinParts[p].add(DummySkinPart);
 		}
+
+		m_pClient->m_pMenus->RenderLoading(5);
 	}
 
 	// create dummy skin
@@ -260,10 +305,12 @@ void CSkins::OnInit()
 		m_DummySkin.m_aPartColors[p] = p==SKINPART_MARKING ? (255<<24)+65408 : 65408;
 		m_DummySkin.m_aUseCustomColors[p] = 0;
 	}
+	m_pClient->m_pMenus->RenderLoading(1);
 
 	// load skins
 	m_aSkins.clear();
 	Storage()->ListDirectory(IStorage::TYPE_ALL, "skins", SkinScan, this);
+	m_pClient->m_pMenus->RenderLoading(5);
 
 	// add dummy skin
 	if(!m_aSkins.size())
@@ -285,8 +332,10 @@ void CSkins::OnInit()
 			str_format(aBuf, sizeof(aBuf), "loaded xmas hat '%s'", pFileName);
 			Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "game", aBuf);
 			m_XmasHatTexture = Graphics()->LoadTextureRaw(Info.m_Width, Info.m_Height, Info.m_Format, Info.m_pData, Info.m_Format, 0);
+			mem_free(Info.m_pData);
 		}
 	}
+	m_pClient->m_pMenus->RenderLoading(1);
 
 	{
 		// add bot decoration
@@ -304,15 +353,17 @@ void CSkins::OnInit()
 			str_format(aBuf, sizeof(aBuf), "loaded bot '%s'", pFileName);
 			Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "game", aBuf);
 			m_BotTexture = Graphics()->LoadTextureRaw(Info.m_Width, Info.m_Height, Info.m_Format, Info.m_pData, Info.m_Format, 0);
+			mem_free(Info.m_pData);
 		}
 	}
+	m_pClient->m_pMenus->RenderLoading(1);
 }
 
 void CSkins::AddSkin(const char *pSkinName)
 {
 	CSkin Skin = m_DummySkin;
 	Skin.m_Flags = 0;
-	str_copy(Skin.m_aName, pSkinName, sizeof(Skin.m_aName));
+	str_utf8_copy_num(Skin.m_aName, pSkinName, sizeof(Skin.m_aName), MAX_SKIN_LENGTH);
 	for(int PartIndex = 0; PartIndex < NUM_SKINPARTS; ++PartIndex)
 	{
 		int SkinPart = FindSkinPart(PartIndex, ms_apSkinVariables[PartIndex], false);
@@ -321,7 +372,7 @@ void CSkins::AddSkin(const char *pSkinName)
 		Skin.m_aUseCustomColors[PartIndex] = *ms_apUCCVariables[PartIndex];
 		Skin.m_aPartColors[PartIndex] = *ms_apColorVariables[PartIndex];
 	}
-	int SkinIndex = Find(pSkinName, false);
+	int SkinIndex = Find(Skin.m_aName, false);
 	if(SkinIndex != -1)
 		m_aSkins[SkinIndex] = Skin;
 	else
@@ -345,7 +396,7 @@ int CSkins::NumSkinPart(int Part)
 
 const CSkins::CSkin *CSkins::Get(int Index)
 {
-	return &m_aSkins[max(0, Index%m_aSkins.size())];
+	return &m_aSkins[maximum(0, Index%m_aSkins.size())];
 }
 
 int CSkins::Find(const char *pName, bool AllowSpecialSkin)
@@ -361,7 +412,7 @@ int CSkins::Find(const char *pName, bool AllowSpecialSkin)
 const CSkins::CSkinPart *CSkins::GetSkinPart(int Part, int Index)
 {
 	int Size = m_aaSkinParts[Part].size();
-	return &m_aaSkinParts[Part][max(0, Index%Size)];
+	return &m_aaSkinParts[Part][maximum(0, Index%Size)];
 }
 
 int CSkins::FindSkinPart(int Part, const char *pName, bool AllowSpecialPart)
@@ -372,6 +423,30 @@ int CSkins::FindSkinPart(int Part, const char *pName, bool AllowSpecialPart)
 			return i;
 	}
 	return -1;
+}
+
+void CSkins::RandomizeSkin()
+{
+	for(int p = 0; p < NUM_SKINPARTS; p++)
+	{
+		int Hue = random_int() % 255;
+		int Sat = random_int() % 255;
+		int Lgt = random_int() % 255;
+		int Alp = 0;
+		if (p == 1) // SKINPART_MARKING
+			Alp = random_int() % 255;
+		int ColorVariable = (Alp << 24) | (Hue << 16) | (Sat << 8) | Lgt;
+		*CSkins::ms_apUCCVariables[p] = true;
+		*CSkins::ms_apColorVariables[p] = ColorVariable;
+	}
+
+	for(int p = 0; p < NUM_SKINPARTS; p++)
+	{
+		const CSkins::CSkinPart *s = GetSkinPart(p, random_int() % NumSkinPart(p));
+		while(s->m_Flags&CSkins::SKINFLAG_SPECIAL)
+			s = GetSkinPart(p, random_int() % NumSkinPart(p));
+		mem_copy(CSkins::ms_apSkinVariables[p], s->m_aName, MAX_SKIN_ARRAY_SIZE);
+	}
 }
 
 vec3 CSkins::GetColorV3(int v) const
@@ -415,4 +490,134 @@ int CSkins::GetTeamColor(int UseCustomColors, int PartColor, int Team, int Part)
 		ColorVal += PartColor&0xff000000;
 
 	return ColorVal;
+}
+
+bool CSkins::ValidateSkinParts(char *apPartNames[NUM_SKINPARTS], int *pUseCustomColors, int *pPartColors, int GameFlags) const
+{
+	// force standard (black) eyes on team skins
+	if(GameFlags&GAMEFLAG_TEAMS)
+	{
+		// TODO: adjust eye color here as well?
+		if(str_comp(apPartNames[SKINPART_EYES], "colorable") == 0 || str_comp(apPartNames[SKINPART_EYES], "negative") == 0)
+		{
+			str_copy(apPartNames[SKINPART_EYES], "standard", MAX_SKIN_ARRAY_SIZE);
+			return false;
+		}
+	}
+	else
+	{
+		const int BodyColor = pPartColors[SKINPART_BODY];
+		const int EyeColor = pPartColors[SKINPART_EYES];
+
+		vec3 BodyHsl(((BodyColor>>16)&0xff)/255.0f, ((BodyColor>>8)&0xff)/255.0f, (BodyColor&0xff)/255.0f);
+		vec3 EyeHsl(((EyeColor>>16)&0xff)/255.0f, ((EyeColor>>8)&0xff)/255.0f, (EyeColor&0xff)/255.0f);
+
+		if(!pUseCustomColors[SKINPART_BODY])
+			BodyHsl = vec3(0, 0, 1);
+
+		const vec3 BodyLab = RgbToLab(HslToRgb(BodyHsl));
+
+		if(str_comp(apPartNames[SKINPART_EYES], "negative") == 0)
+		{
+			if(!pUseCustomColors[SKINPART_EYES])
+				EyeHsl = vec3(0, 0, 1);
+
+			vec3 OrgEyeHsl = EyeHsl;
+			EyeHsl.l *= 0.925f;
+
+			const vec3 EyeLab = RgbToLab(HslToRgb(EyeHsl));
+			if(distance(BodyLab, EyeLab) < MIN_EYE_BODY_COLOR_DIST)
+			{
+				OrgEyeHsl.l = clamp(OrgEyeHsl.l - 0.22f, 0.f, 1.f);
+
+				// white eye can't go to black because of our DARKEST_COLOR_LGT restriction, so switch to standard (black) eyes
+				if(OrgEyeHsl.l < DARKEST_COLOR_LGT/255.f)
+					str_copy(apPartNames[SKINPART_EYES], "standard", MAX_SKIN_ARRAY_SIZE); // black
+				else
+				{
+					pUseCustomColors[SKINPART_EYES] = 1;
+					pPartColors[SKINPART_EYES] = (int(OrgEyeHsl.h*255) << 16) | (int(OrgEyeHsl.s*255) << 8) | (int(OrgEyeHsl.l*255));
+				}
+
+				return false;
+			}
+		}
+		else if(str_comp(apPartNames[SKINPART_EYES], "colorable") == 0)
+		{
+			if(!pUseCustomColors[SKINPART_EYES])
+				EyeHsl = vec3(0, 0, 1);
+
+			vec3 OrgEyeHsl = EyeHsl;
+			EyeHsl.l = clamp(EyeHsl.l * 0.0823f, 0.f, 1.f);
+
+			const vec3 EyeLab = RgbToLab(HslToRgb(EyeHsl));
+			if(distance(BodyLab, EyeLab) < MIN_EYE_BODY_COLOR_DIST)
+			{
+				OrgEyeHsl.l -= 0.6f;
+				OrgEyeHsl.l = clamp(OrgEyeHsl.l, 0.f, 1.f);
+
+				pUseCustomColors[SKINPART_EYES] = 1;
+				pPartColors[SKINPART_EYES] = (int(OrgEyeHsl.h*255) << 16) | (int(OrgEyeHsl.s*255) << 8) | (int(OrgEyeHsl.l*255));
+
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+bool CSkins::SaveSkinfile(const char *pSaveSkinName)
+{
+	char aBuf[IO_MAX_PATH_LENGTH];
+	str_format(aBuf, sizeof(aBuf), "skins/%s.json", pSaveSkinName);
+	IOHANDLE File = Storage()->OpenFile(aBuf, IOFLAG_WRITE, IStorage::TYPE_SAVE);
+	if(!File)
+		return false;
+
+	CJsonWriter Writer(File);
+
+	Writer.BeginObject();
+	Writer.WriteAttribute("skin");
+	Writer.BeginObject();
+	for(int PartIndex = 0; PartIndex < NUM_SKINPARTS; PartIndex++)
+	{
+		if(!ms_apSkinVariables[PartIndex][0])
+			continue;
+
+		// part start
+		Writer.WriteAttribute(ms_apSkinPartNames[PartIndex]);
+		Writer.BeginObject();
+		{
+			Writer.WriteAttribute("filename");
+			Writer.WriteStrValue(ms_apSkinVariables[PartIndex]);
+
+			const bool CustomColors = *ms_apUCCVariables[PartIndex];
+			Writer.WriteAttribute("custom_colors");
+			Writer.WriteBoolValue(CustomColors);
+
+			if(CustomColors)
+			{
+				for(int c = 0; c < NUM_COLOR_COMPONENTS-1; c++)
+				{
+					int Val = (*ms_apColorVariables[PartIndex] >> (2-c)*8) & 0xff;
+					Writer.WriteAttribute(ms_apColorComponents[c]);
+					Writer.WriteIntValue(Val);
+				}
+				if(PartIndex == SKINPART_MARKING)
+				{
+					int Val = (*ms_apColorVariables[PartIndex] >> 24) & 0xff;
+					Writer.WriteAttribute(ms_apColorComponents[3]);
+					Writer.WriteIntValue(Val);
+				}
+			}
+		}
+		Writer.EndObject();
+	}
+	Writer.EndObject();
+	Writer.EndObject();
+
+	// add new skin to the skin list
+	AddSkin(pSaveSkinName);
+	return true;
 }

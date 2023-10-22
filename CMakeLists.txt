@@ -1,4 +1,7 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 2.8.12...3.19.1)
+if(CMAKE_VERSION VERSION_LESS 3.12)
+  cmake_policy(VERSION ${CMAKE_VERSION})
+endif()
 
 file(STRINGS src/game/version.h VERSION_LINE
   LIMIT_COUNT 1
@@ -17,16 +20,15 @@ else()
   message(FATAL_ERROR "Couldn't parse version from src/game/version.h")
 endif()
 
-if(POLICY CMP0048)
-  cmake_policy(SET CMP0048 NEW)
-  project(teeworlds VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
-else()
-  project(teeworlds)
+# Extra support for CMake pre-3.0
+if(NOT POLICY CMP0048)
   set(PROJECT_VERSION_MAJOR ${VERSION_MAJOR})
   set(PROJECT_VERSION_MINOR ${VERSION_MINOR})
   set(PROJECT_VERSION_PATCH ${VERSION_PATCH})
   set(PROJECT_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
 endif()
+
+project(teeworlds VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
 
 set(ORIGINAL_CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH})
 set(ORIGINAL_CMAKE_REQUIRED_INCLUDES ${CMAKE_REQUIRED_INCLUDES})
@@ -34,10 +36,10 @@ set(ORIGINAL_CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES})
 set(OWN_CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/cmake)
 set(CMAKE_MODULE_PATH ${OWN_CMAKE_MODULE_PATH})
 
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-  set(TARGET_BITS "64")
-elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
+if(CMAKE_SIZEOF_VOID_P EQUAL 4)
   set(TARGET_BITS "32")
+else()
+  set(TARGET_BITS "64")
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
@@ -65,16 +67,17 @@ if(TARGET_OS STREQUAL "windows")
 endif()
 
 option(CLIENT "Compile client" ON)
+option(HEADLESS_CLIENT "Build the client without graphics" OFF)
 option(DOWNLOAD_DEPENDENCIES "Download dependencies (only available on Windows)" ${AUTO_DEPENDENCIES_DEFAULT})
 option(DOWNLOAD_GTEST "Download and compile GTest if not found" ${AUTO_DEPENDENCIES_DEFAULT})
 option(PREFER_BUNDLED_LIBS "Prefer bundled libraries over system libraries" ${AUTO_DEPENDENCIES_DEFAULT})
 option(DEV "Don't generate stuff necessary for packaging" OFF)
 
-set(OpenGL_GL_PREFERENCE LEGACY)
+set(OpenGL_GL_PREFERENCE GLVND)
 
 # Set the default build type to Release
 if(NOT(CMAKE_BUILD_TYPE))
-  if(DEV)
+  if(NOT(DEV))
     set(CMAKE_BUILD_TYPE Release)
   else()
     set(CMAKE_BUILD_TYPE Debug)
@@ -135,8 +138,7 @@ endfunction()
 
 if(NOT MSVC)
   # Protect the stack pointer.
-  # -fstack-protector-all doesn't work on MinGW.
-  add_c_compiler_flag_if_supported(OUR_FLAGS -fstack-protector-strong)
+  add_c_compiler_flag_if_supported(OUR_FLAGS -fstack-protector-all)
 
   # Protect the stack from clashing.
   add_c_compiler_flag_if_supported(OUR_FLAGS -fstack-clash-protection)
@@ -297,7 +299,7 @@ if(NOT CMAKE_CROSSCOMPILING)
 endif()
 find_package(ZLIB)
 find_package(Crypto)
-find_package(OwnFreetype)
+find_package(Freetype)
 find_package(Git)
 find_package(GTest)
 find_package(Pnglite)
@@ -318,6 +320,11 @@ if(TARGET_OS AND TARGET_OS STREQUAL "mac")
   endif()
 
   find_program(HDIUTIL hdiutil)
+  if(HDIUTIL)
+    set(HDIUTIL_FOUND ON)
+  else()
+    set(HDIUTIL_FOUND OFF)
+  endif()
 endif()
 
 message(STATUS "******** Teeworlds ********")
@@ -377,24 +384,26 @@ endif()
 
 if(TARGET_OS STREQUAL "windows")
   set(PLATFORM_CLIENT)
-  set(PLATFORM_CLIENT_LIBS opengl32 glu32 winmm)
+  set(PLATFORM_CLIENT_LIBS opengl32 winmm imm32)
   set(PLATFORM_LIBS ws2_32) # Windows sockets
 elseif(TARGET_OS STREQUAL "mac")
   find_library(CARBON Carbon)
   find_library(COCOA Cocoa)
   find_library(OPENGL OpenGL)
   set(PLATFORM_CLIENT
-    src/osxlaunch/client.h
-    src/osxlaunch/client.m
+    src/macoslaunch/client.m
   )
   set(PLATFORM_CLIENT_LIBS ${COCOA} ${OPENGL})
   set(PLATFORM_LIBS ${CARBON})
 else()
   set(PLATFORM_CLIENT)
   find_package(OpenGL)
-  find_package(X11)
-  set(PLATFORM_CLIENT_LIBS ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${X11_X11_LIB})
-  set(PLATFORM_CLIENT_INCLUDE_DIRS ${OPENGL_INCLUDE_DIR} ${X11_X11_INCLUDE_PATH})
+  if(CMAKE_VERSION VERSION_LESS 3.10)
+    set(PLATFORM_CLIENT_LIBS ${OPENGL_gl_LIBRARY})
+  else()
+    set(PLATFORM_CLIENT_LIBS ${OPENGL_opengl_LIBRARY})
+  endif()
+  set(PLATFORM_CLIENT_INCLUDE_DIRS ${OPENGL_INCLUDE_DIR})
   if(TARGET_OS STREQUAL "linux")
     set(PLATFORM_LIBS rt) # clock_gettime for glibc < 2.17
   else()
@@ -407,7 +416,7 @@ endif()
 ########################################################################
 
 if(NOT(GTEST_FOUND) AND DOWNLOAD_GTEST)
-  set(TEEWORLDS_GTEST_VERSION release-1.8.1)
+  set(TEEWORLDS_GTEST_VERSION 5c8ca58edfb304b2dd5e6061f83387470826dd87) # master as of 2021-04-07
   configure_file(cmake/Download_GTest_CMakeLists.txt.in googletest-download/CMakeLists.txt)
   execute_process(COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" .
     RESULT_VARIABLE result
@@ -440,7 +449,12 @@ if(NOT(GTEST_FOUND) AND DOWNLOAD_GTEST)
           # `/w` disables all warnings. This is needed because `gtest` enables
           # `/WX` (equivalent of `-Werror`) for some reason, breaking builds
           # when MSVS adds new warnings.
-          target_compile_options(${target} PRIVATE $<$<NOT:${DBG}>:/MT> $<${DBG}:/MTd> /w)
+          target_compile_options(${target} PRIVATE /w)
+          if(POLICY CMP0091)
+            set_property(TARGET ${target} PROPERTY MSVC_RUNTIME_LIBRARY MultiThreaded$<${DBG}:Debug>)
+          else()
+            target_compile_options(${target} PRIVATE $<$<NOT:${DBG}>:/MT> $<${DBG}:/MTd>)
+          endif()
         endforeach()
       endif()
 
@@ -464,7 +478,11 @@ set_src(DEP_MD5_SRC GLOB src/engine/external/md5 md5.c md5.h)
 add_library(md5 EXCLUDE_FROM_ALL OBJECT ${DEP_MD5_SRC})
 
 list(APPEND TARGETS_DEP json md5)
-set(DEP_MD5 $<TARGET_OBJECTS:json> $<TARGET_OBJECTS:md5>)
+set(DEP_JSON $<TARGET_OBJECTS:json>)
+set(DEP_MD5)
+if(NOT CRYPTO_FOUND)
+  set(DEP_MD5 $<TARGET_OBJECTS:md5>)
+endif()
 
 ########################################################################
 # DATA
@@ -858,6 +876,7 @@ set(EXPECTED_DATA
   editor/automap/desert_main.json
   editor/automap/grass_doodads.json
   editor/automap/grass_main.json
+  editor/automap/jungle_deathtiles.json
   editor/automap/jungle_main.json
   editor/automap/winter_main.json
   editor/background.png
@@ -866,6 +885,8 @@ set(EXPECTED_DATA
   editor/entities.png
   emoticons.png
   fonts/DejaVuSans.ttf
+  fonts/SourceHanSans.ttc
+  fonts/index.json
   game.png
   languages/belarusian.json
   languages/bosnian.json
@@ -960,48 +981,126 @@ set(EXPECTED_DATA
   maps/lms1.map
   maps/readme.txt
   particles.png
+  race_flag.png
+  skins/beaver.json
   skins/bluekitty.json
   skins/bluestripe.json
+  skins/body/bat.png
   skins/body/bear.png
+  skins/body/beaver.png
+  skins/body/dog.png
+  skins/body/force.png
+  skins/body/fox.png
+  skins/body/hippo.png
   skins/body/kitty.png
+  skins/body/koala.png
+  skins/body/monkey.png
+  skins/body/mouse.png
+  skins/body/piglet.png
+  skins/body/raccoon.png
+  skins/body/spiky.png
   skins/body/standard.png
   skins/body/x_ninja.png
   skins/bot.png
   skins/brownbear.json
+  skins/bumbler.json
   skins/cammo.json
   skins/cammostripes.json
+  skins/cavebat.json
   skins/decoration/hair.png
   skins/decoration/twinbopp.png
+  skins/decoration/twinmello.png
+  skins/decoration/twinpen.png
   skins/decoration/unibop.png
+  skins/decoration/unimelo.png
+  skins/decoration/unipento.png
   skins/default.json
+  skins/eyes/colorable.png
+  skins/eyes/negative.png
   skins/eyes/standard.png
   skins/eyes/standardreal.png
   skins/eyes/x_ninja.png
   skins/feet/standard.png
+  skins/force.json
+  skins/fox.json
+  skins/greycoon.json
+  skins/greyfox.json
   skins/hands/standard.png
+  skins/hippo.json
   skins/koala.json
+  skins/limedog.json
   skins/limekitty.json
   skins/marking/bear.png
+  skins/marking/belly1.png
+  skins/marking/belly2.png
+  skins/marking/blush.png
+  skins/marking/bug.png
   skins/marking/cammo1.png
   skins/marking/cammo2.png
   skins/marking/cammostripes.png
+  skins/marking/coonfluff.png
   skins/marking/donny.png
+  skins/marking/downdony.png
   skins/marking/duodonny.png
+  skins/marking/fox.png
+  skins/marking/hipbel.png
+  skins/marking/lowcross.png
+  skins/marking/lowpaint.png
+  skins/marking/marksman.png
+  skins/marking/mice.png
+  skins/marking/mixture1.png
+  skins/marking/mixture2.png
+  skins/marking/monkey.png
+  skins/marking/panda1.png
+  skins/marking/panda2.png
+  skins/marking/purelove.png
   skins/marking/saddo.png
+  skins/marking/setisu.png
+  skins/marking/sidemarks.png
+  skins/marking/singu.png
   skins/marking/stripe.png
+  skins/marking/striped.png
   skins/marking/stripes.png
+  skins/marking/stripes2.png
+  skins/marking/thunder.png
+  skins/marking/tiger1.png
+  skins/marking/tiger2.png
   skins/marking/toptri.png
+  skins/marking/triangular.png
+  skins/marking/tricircular.png
+  skins/marking/tripledon.png
+  skins/marking/tritri.png
+  skins/marking/twinbelly.png
+  skins/marking/twincross.png
   skins/marking/twintri.png
   skins/marking/uppy.png
   skins/marking/warpaint.png
+  skins/marking/warstripes.png
   skins/marking/whisker.png
+  skins/marking/wildpaint.png
+  skins/marking/wildpatch.png
+  skins/marking/yinyang.png
+  skins/monkey.json
+  skins/paintgre.json
+  skins/pandabear.json
+  skins/panther.json
+  skins/pento.json
+  skins/piggy.json
   skins/pinky.json
+  skins/raccoon.json
   skins/redbopp.json
   skins/redstripe.json
   skins/saddo.json
+  skins/setisu.json
+  skins/snowti.json
+  skins/spiky.json
+  skins/swardy.json
+  skins/tiger.json
+  skins/tooxy.json
   skins/toptri.json
   skins/twinbop.json
   skins/twintri.json
+  skins/warmouse.json
   skins/warpaint.json
   skins/x_ninja.json
   skins/xmas_hat.png
@@ -1016,6 +1115,7 @@ set(EXPECTED_DATA
   ui/gametypes/lms.png
   ui/gametypes/lts.png
   ui/gametypes/mod.png
+  ui/gametypes/race.png
   ui/gametypes/tdm.png
   ui/gui_buttons.png
   ui/gui_cursor.png
@@ -1023,11 +1123,14 @@ set(EXPECTED_DATA
   ui/gui_logo.png
   ui/icons/arrows.png
   ui/icons/browse.png
+  ui/icons/browser.png
   ui/icons/chat_whisper.png
   ui/icons/friend.png
   ui/icons/level.png
   ui/icons/menu.png
+  ui/icons/network.png
   ui/icons/sidebar.png
+  ui/icons/timer_clock.png
   ui/icons/tools.png
   ui/menuimages/demos.png
   ui/menuimages/editor.png
@@ -1036,6 +1139,7 @@ set(EXPECTED_DATA
   ui/menuimages/settings.png
   ui/no_skinpart.png
   ui/sound_icons.png
+  ui/themes/auto.png
   ui/themes/heavens.png
   ui/themes/heavens_day.map
   ui/themes/heavens_night.map
@@ -1043,6 +1147,9 @@ set(EXPECTED_DATA
   ui/themes/jungle_day.map
   ui/themes/jungle_night.map
   ui/themes/none.png
+  ui/themes/winter.png
+  ui/themes/winter_day.map
+  ui/themes/winter_night.map
 )
 
 if(NOT EXISTS ${PROJECT_SOURCE_DIR}/datasrc/languages/index.json)
@@ -1063,7 +1170,7 @@ if(NOT EXISTS ${PROJECT_SOURCE_DIR}/datasrc/maps/dm1.map)
   endforeach()
 endif()
 
-set_glob(DATA GLOB_RECURSE "json;map;png;rules;ttf;txt;wv" datasrc ${EXPECTED_DATA})
+set_glob(DATA GLOB_RECURSE "json;map;png;rules;ttc;ttf;txt;wv" datasrc ${EXPECTED_DATA})
 
 ########################################################################
 # COPY DATA AND DLLS
@@ -1155,6 +1262,7 @@ set_src(BASE GLOB_RECURSE src/base
   detect.h
   hash.c
   hash.h
+  hash_bundled.c
   hash_ctxt.h
   hash_libtomcrypt.c
   hash_openssl.c
@@ -1164,7 +1272,6 @@ set_src(BASE GLOB_RECURSE src/base
   tl/algorithm.h
   tl/allocator.h
   tl/array.h
-  tl/base.h
   tl/range.h
   tl/sorted_array.h
   tl/string.h
@@ -1175,15 +1282,16 @@ set_src(ENGINE_INTERFACE GLOB src/engine
   client.h
   config.h
   console.h
+  contacts.h
   demo.h
   editor.h
   engine.h
-  friends.h
   graphics.h
   input.h
   kernel.h
   keys.h
   map.h
+  mapchecker.h
   masterserver.h
   message.h
   server.h
@@ -1213,6 +1321,8 @@ set_src(ENGINE_SHARED GLOB src/engine/shared
   huffman.h
   jobs.cpp
   jobs.h
+  jsonwriter.cpp
+  jsonwriter.h
   kernel.cpp
   linereader.cpp
   linereader.h
@@ -1222,7 +1332,6 @@ set_src(ENGINE_SHARED GLOB src/engine/shared
   masterserver.cpp
   memheap.cpp
   memheap.h
-  message.h
   netban.cpp
   netban.h
   network.cpp
@@ -1242,10 +1351,11 @@ set_src(ENGINE_SHARED GLOB src/engine/shared
   snapshot.h
   storage.cpp
 )
-set(ENGINE_GENERATED_SHARED src/generated/protocol.cpp src/generated/protocol.h)
+set(ENGINE_GENERATED_SHARED src/generated/nethash.cpp src/generated/protocol.cpp src/generated/protocol.h)
 set_src(GAME_SHARED GLOB src/game
   collision.cpp
   collision.h
+  commands.h
   gamecore.cpp
   gamecore.h
   layers.cpp
@@ -1262,7 +1372,7 @@ set(GAME_GENERATED_SHARED
   src/generated/protocol.h
 )
 
-set(DEPS ${DEP_MD5} ${ZLIB_DEP})
+set(DEPS ${DEP_JSON} ${DEP_MD5} ${ZLIB_DEP})
 
 # Libraries
 set(LIBS ${CMAKE_THREAD_LIBS_INIT} ${ZLIB_LIBRARIES} ${CRYPTO_LIBRARIES} ${PLATFORM_LIBS})
@@ -1284,10 +1394,11 @@ if(CLIENT)
     backend_sdl.h
     client.cpp
     client.h
-    friends.cpp
-    friends.h
+    contacts.cpp
+    contacts.h
     graphics_threaded.cpp
     graphics_threaded.h
+    graphics_threaded_null.h
     input.cpp
     input.h
     keynames.h
@@ -1300,7 +1411,8 @@ if(CLIENT)
     serverbrowser_filter.h
     sound.cpp
     sound.h
-    text.cpp
+    textrender.cpp
+    textrender.h
   )
   set_src(GAME_CLIENT GLOB_RECURSE src/game/client
     animstate.cpp
@@ -1332,10 +1444,10 @@ if(CLIENT)
     components/flow.h
     components/hud.cpp
     components/hud.h
+    components/infomessages.cpp
+    components/infomessages.h
     components/items.cpp
     components/items.h
-    components/killmessages.cpp
-    components/killmessages.h
     components/mapimages.cpp
     components/mapimages.h
     components/maplayers.cpp
@@ -1346,7 +1458,6 @@ if(CLIENT)
     components/menus_callback.cpp
     components/menus_demo.cpp
     components/menus_ingame.cpp
-    components/menus_popups.cpp
     components/menus_settings.cpp
     components/menus_start.cpp
     components/motd.cpp
@@ -1382,6 +1493,12 @@ if(CLIENT)
     render_map.cpp
     ui.cpp
     ui.h
+    ui_listbox.cpp
+    ui_listbox.h
+    ui_rect.cpp
+    ui_rect.h
+    ui_scrollregion.cpp
+    ui_scrollregion.h
   )
   set_src(GAME_EDITOR GLOB src/game/editor
     auto_map.cpp
@@ -1539,7 +1656,7 @@ list(APPEND TARGETS_OWN ${TARGET_SERVER})
 list(APPEND TARGETS_LINK ${TARGET_SERVER})
 
 if(TARGET_OS AND TARGET_OS STREQUAL "mac")
-  set(SERVER_LAUNCHER_SRC src/osxlaunch/server.mm)
+  set(SERVER_LAUNCHER_SRC src/macoslaunch/server.mm)
   set(TARGET_SERVER_LAUNCHER ${TARGET_SERVER}-Launcher)
   add_executable(${TARGET_SERVER_LAUNCHER} ${SERVER_LAUNCHER_SRC})
   target_link_libraries(${TARGET_SERVER_LAUNCHER} ${COCOA})
@@ -1602,9 +1719,16 @@ add_custom_target(everything DEPENDS ${TARGETS_OWN})
 
 if(GTEST_FOUND OR DOWNLOAD_GTEST)
   set_src(TESTS GLOB src/test
+    bytes_be.cpp
+    compression.cpp
+    datafile.cpp
     fs.cpp
     git_revision.cpp
     hash.cpp
+    io.cpp
+    jsonwriter.cpp
+    packer.cpp
+    sorted_array.cpp
     storage.cpp
     str.cpp
     test.cpp
@@ -1721,7 +1845,7 @@ if(TARGET_OS AND TARGET_BITS)
       set(CPACK_SYSTEM_NAME "linux_x86_64")
     endif()
   elseif(TARGET_OS STREQUAL "mac")
-    set(CPACK_SYSTEM_NAME "osx")
+    set(CPACK_SYSTEM_NAME "macos")
     set(CPACK_GENERATOR DMG)
   endif()
 endif()
@@ -1831,9 +1955,9 @@ if(CLIENT AND (DMGTOOLS_FOUND OR HDIUTIL))
     COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/other/icons/${TARGET_CLIENT}.icns ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Resources/
     COMMAND ${CMAKE_COMMAND} -E copy bundle/client/Info.plist ${PROJECT_SOURCE_DIR}/other/bundle/client/PkgInfo ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${TARGET_CLIENT}> ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/other/sdl/mac/lib64/SDL2.framework ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/SDL2.framework
-    COMMAND ${CMAKE_COMMAND} -E copy ${FREETYPE_LIBRARY} ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/
-    COMMAND ${PYTHON_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/darwin_change_dylib.py change --tools ${CMAKE_INSTALL_NAME_TOOL} ${CMAKE_OTOOL} ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/${TARGET_CLIENT} SDL2 @executable_path/../Frameworks/SDL2.framework/SDL2
+    COMMAND ${CMAKE_COMMAND} -E copy ${SDL2_LIBRARY} ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/libSDL2-2.0.0.dylib
+    COMMAND ${CMAKE_COMMAND} -E copy ${FREETYPE_LIBRARY} ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/libfreetype.6.dylib
+    COMMAND ${PYTHON_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/darwin_change_dylib.py change --tools ${CMAKE_INSTALL_NAME_TOOL} ${CMAKE_OTOOL} ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/${TARGET_CLIENT} SDL2 @executable_path/../Frameworks/libSDL2-2.0.0.dylib
     COMMAND ${PYTHON_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/darwin_change_dylib.py change --tools ${CMAKE_INSTALL_NAME_TOOL} ${CMAKE_OTOOL} ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/${TARGET_CLIENT} libfreetype @executable_path/../Frameworks/libfreetype.6.dylib
 
     # SERVER
@@ -1945,11 +2069,16 @@ set(TARGETS ${TARGETS_OWN} ${TARGETS_DEP})
 
 foreach(target ${TARGETS})
   if(MSVC)
-    target_compile_options(${target} PRIVATE $<$<NOT:${DBG}>:/MT> $<${DBG}:/MTd>) # Use static CRT
+    if(POLICY CMP0091)
+      set_property(TARGET ${target} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<${DBG}:Debug>")
+    else()
+      target_compile_options(${target} PRIVATE $<$<NOT:${DBG}>:/MT> $<${DBG}:/MTd>)
+    endif()
     target_compile_options(${target} PRIVATE /MP) # Use multiple cores
     target_compile_options(${target} PRIVATE /EHsc) # Only catch C++ exceptions with catch.
     target_compile_options(${target} PRIVATE /GS) # Protect the stack pointer.
     target_compile_options(${target} PRIVATE /wd4996) # Use of non-_s functions.
+    target_compile_options(${target} PRIVATE /utf-8) # Use UTF-8 for source files.
   endif()
   if(OUR_FLAGS)
     target_compile_options(${target} PRIVATE ${OUR_FLAGS})
@@ -1983,9 +2112,15 @@ endforeach()
 
 foreach(target ${TARGETS_OWN})
   if(MSVC)
+    target_compile_options(${target} PRIVATE /W3)
     target_compile_options(${target} PRIVATE /wd4244) # Possible loss of data (float -> int, int -> float, etc.).
     target_compile_options(${target} PRIVATE /wd4267) # Possible loss of data (size_t - int on win64).
     target_compile_options(${target} PRIVATE /wd4800) # Implicit conversion of int to bool.
+  endif()
+  if(TARGET_OS STREQUAL "windows")
+    target_compile_definitions(${target} PRIVATE _WIN32_WINNT=0x0501)
+    target_compile_definitions(${target} PRIVATE UNICODE) # Windows headers
+    target_compile_definitions(${target} PRIVATE _UNICODE) # C-runtime
   endif()
   if(OUR_FLAGS_OWN)
     target_compile_options(${target} PRIVATE ${OUR_FLAGS_OWN})
@@ -1998,6 +2133,9 @@ foreach(target ${TARGETS_OWN})
   if(CRYPTO_FOUND)
     target_compile_definitions(${target} PRIVATE CONF_OPENSSL)
     target_include_directories(${target} PRIVATE ${CRYPTO_INCLUDE_DIRS})
+  endif()
+  if(HEADLESS_CLIENT)
+    target_compile_definitions(${target} PRIVATE CONF_HEADLESS_CLIENT)
   endif()
 endforeach()
 

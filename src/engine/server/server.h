@@ -3,6 +3,8 @@
 #ifndef ENGINE_SERVER_SERVER_H
 #define ENGINE_SERVER_SERVER_H
 
+#include <base/tl/sorted_array.h>
+
 #include <engine/server.h>
 #include <engine/shared/memheap.h>
 #include <vector>
@@ -18,7 +20,7 @@ class CSnapIDPool
 	{
 	public:
 		short m_Next;
-		short m_State; // 0 = free, 1 = alloced, 2 = timed
+		short m_State; // 0 = free, 1 = allocated, 2 = timed
 		int m_Timeout;
 	};
 
@@ -63,10 +65,12 @@ public:
 class CServer : public IServer
 {
 	class IGameServer *m_pGameServer;
+	class CConfig *m_pConfig;
 	class IConsole *m_pConsole;
 	class IStorage *m_pStorage;
 public:
 	class IGameServer *GameServer() { return m_pGameServer; }
+	class CConfig *Config() { return m_pConfig; }
 	class IConsole *Console() { return m_pConsole; }
 	class IStorage *Storage() { return m_pStorage; }
 
@@ -122,8 +126,8 @@ public:
 		CInput m_aInputs[200]; // TODO: handle input better
 		int m_CurrentInput;
 
-		char m_aName[MAX_NAME_LENGTH];
-		char m_aClan[MAX_CLAN_LENGTH];
+		char m_aName[MAX_NAME_ARRAY_SIZE];
+		char m_aClan[MAX_CLAN_ARRAY_SIZE];
 		int m_Version;
 		int m_Country;
 		int m_Score;
@@ -134,7 +138,7 @@ public:
 		bool m_NoRconNote;
 		bool m_Quitting;
 		const IConsole::CCommandInfo *m_pRconCmdToSend;
-		const CMapListEntry *m_pMapListEntryToSend;
+		int m_MapListEntryToSend;
 
 		void Reset();
 
@@ -154,13 +158,12 @@ public:
 	std::vector<IEngineMap*> m_vpMap;
 
 	int64 m_GameStartTime;
-	int m_RunServer;
-	int m_MapReload;
+	bool m_RunServer;
+	bool m_MapReload;
 	int m_RconClientID;
 	int m_RconAuthLevel;
 	int m_PrintCBIndex;
-
-	int64 m_Lastheartbeat;
+	char m_aShutdownReason[128];
 
 	// map
 	enum
@@ -181,24 +184,17 @@ public:
 
 	std::vector<CMapData> m_vMapData;
 
-	//maplist
+	// maplist
 	struct CMapListEntry
 	{
-		CMapListEntry *m_pPrev;
-		CMapListEntry *m_pNext;
 		char m_aName[IConsole::TEMPMAP_NAME_LENGTH];
+
+		CMapListEntry() {}
+		CMapListEntry(const char *pName) { str_copy(m_aName, pName, sizeof(m_aName)); }
+		bool operator<(const CMapListEntry &Other) const { return str_comp_filenames(m_aName, Other.m_aName) < 0; }
 	};
 
-	struct CSubdirCallbackUserdata
-	{
-		CServer *m_pServer;
-		char m_aName[IConsole::TEMPMAP_NAME_LENGTH];
-	};
-
-	CHeap *m_pMapListHeap;
-	CMapListEntry *m_pLastMapEntry;
-	CMapListEntry *m_pFirstMapEntry;
-	int m_NumMapEntries;
+	sorted_array<CMapListEntry> m_lMaps;
 
 	int m_RconPasswordSet;
 	int m_GeneratedRconPassword;
@@ -242,7 +238,6 @@ public:
 	int ClientCountry(int ClientID) const;
 	bool ClientIngame(int ClientID) const;
 	int ClientMapID(int ClientID) const override;
-	int MaxClients() const;
 
 	virtual int SendMsg(CMsgPacker *pMsg, int Flags, int ClientID);
 
@@ -274,10 +269,13 @@ public:
 	const char *GetMapName(int MapID, char* aMapName) const;
 	int LoadMap(const char *pMapName);
 
-	void InitRegister(CNetServer *pNetServer, IEngineMasterServer *pMasterServer, IConsole *pConsole);
+	void InitRegister(CNetServer *pNetServer, IEngineMasterServer *pMasterServer, CConfig *pConfig, IConsole *pConsole);
+	void InitInterfaces(IKernel *pKernel);
 	int Run();
+	void Free();
 
 	static int MapListEntryCallback(const char *pFilename, int IsDir, int DirType, void *pUser);
+	void InitMapList();
 
 	static void ConKick(IConsole::IResult *pResult, void *pUser);
 	static void ConStatus(IConsole::IResult *pResult, void *pUser);
@@ -289,6 +287,8 @@ public:
 	static void ConSaveConfig(IConsole::IResult *pResult, void *pUser);
 	static void ConLogout(IConsole::IResult *pResult, void *pUser);
 	static void ConchainSpecialInfoupdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
+	static void ConchainPlayerSlotsUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
+	static void ConchainMaxclientsUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainMaxclientsperipUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainModCommandUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainConsoleOutputLevelUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);

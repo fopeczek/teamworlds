@@ -8,7 +8,13 @@ class CHud : public CComponent
 {
 	float m_Width, m_Height;
 	float m_AverageFPS;
+
+
 	int64 m_WarmupHideTick;
+	bool IsLargeWarmupTimerShown();
+
+	int m_CheckpointDiff;
+	int64 m_CheckpointTime;
 
 	void RenderCursor();
 
@@ -21,17 +27,21 @@ class CHud : public CComponent
 	void RenderGameTimer();
 	void RenderPauseTimer();
 	void RenderStartCountdown();
+	void RenderNetworkIssueNotification();
 	void RenderDeadNotification();
-	void RenderSuddenDeath();
 	void RenderScoreHud();
 	void RenderSpectatorHud();
 	void RenderSpectatorNotification();
 	void RenderReadyUpNotification();
 	void RenderWarmupTimer();
+	void RenderRaceTime(const CNetObj_PlayerInfoRace *pRaceInfo);
+	void RenderCheckpoint();
+	void RenderLocalTime(float x);
 public:
 	CHud();
 
 	virtual void OnReset();
+	virtual void OnMessage(int MsgType, void *pRawMsg);
 	virtual void OnRender();
 };
 

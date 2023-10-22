@@ -10,6 +10,7 @@
 /other/*/windows
 __pycache__/
 *.dll
+*.dmg
 *.pyc
 *.pyo
 scripts/work/
@@ -27,22 +28,29 @@ map_version*
 mastersrv*
 packetgen*
 teeworlds*
+!other/bash-completion/teeworlds
 !teeworlds.manifest
 !teeworlds.rc
 teeworlds_srv*
+!other/bash-completion/teeworlds_srv
 testrunner
 versionsrv*
 
 # IDE project files
+.cache
 .cproject
 .idea
 .project
 .settings
 .vs
 .vscode
-out
+*.vcxproj
+*.vcxproj.filters
+compile_commands.json
 cscope.files
 cscope.out
+out
+tags
 
 # CMake
 data
@@ -57,6 +65,7 @@ CPackConfig.cmake
 CPackSourceConfig.cmake
 Debug
 Makefile
+RelWithDebInfo
 Release
 _CPack_Packages/
 build.ninja

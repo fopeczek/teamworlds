@@ -4,6 +4,9 @@
 #define GAME_SERVER_GAMECONTROLLER_H
 
 #include <base/vmath.h>
+#include <base/tl/array.h>
+
+#include <game/commands.h>
 #include <vector>
 
 #include <generated/protocol.h>
@@ -16,6 +19,7 @@
 class IGameController
 {
 	class CGameContext *m_pGameServer;
+	class CConfig *m_pConfig;
 	class IServer *m_pServer;
 
 	// activity
@@ -56,7 +60,7 @@ class IGameController
 	int m_GameStateTimer;
 
 	virtual bool DoWincheckMatch();		// returns true when the match is over
-	virtual void DoWincheckRound() {};
+	virtual void DoWincheckRound() {}
 	bool HasEnoughPlayers() const { return (IsTeamplay() && m_aTeamSize[TEAM_RED] > 0 && m_aTeamSize[TEAM_BLUE] > 0) || (!IsTeamplay() && m_aTeamSize[TEAM_RED] > 1); }
 	void ResetGame();
 	void SetGameState(EGameState GameState, int Timer=0);
@@ -80,6 +84,7 @@ class IGameController
 
 		vec2 m_Pos;
 		bool m_Got;
+		bool m_RandomSpawn;
 		int m_FriendlyTeam;
 		float m_Score;
 	};
@@ -110,6 +115,7 @@ class IGameController
 
 protected:
 	CGameContext *GameServer() const { return m_pGameServer; }
+	CConfig *Config() const { return m_pConfig; }
 	IServer *Server() const { return m_pServer; }
 
 	// game
@@ -137,7 +143,7 @@ protected:
 
 public:
 	IGameController(class CGameContext *pGameServer);
-	virtual ~IGameController() {};
+	virtual ~IGameController() {}
 
 	// event
 	/*
@@ -176,10 +182,11 @@ public:
 	*/
 	virtual bool OnEntity(int Index, vec2 Pos, int MapID);
 
-	void OnPlayerConnect(class CPlayer *pPlayer);
-	void OnPlayerDisconnect(class CPlayer *pPlayer);
-	void OnPlayerInfoChange(class CPlayer *pPlayer);
-	void OnPlayerReadyChange(class CPlayer *pPlayer);
+	virtual void OnPlayerConnect(class CPlayer *pPlayer);
+	virtual void OnPlayerDisconnect(class CPlayer *pPlayer);
+	virtual void OnPlayerInfoChange(class CPlayer *pPlayer);
+	virtual void OnPlayerReadyChange(class CPlayer *pPlayer);
+	void OnPlayerCommand(class CPlayer *pPlayer, const char *pCommandName, const char *pCommandArgs);
 
 	void OnReset();
 
@@ -195,10 +202,15 @@ public:
 	void DoPause(int Seconds) { SetGameState(IGS_GAME_PAUSED, Seconds); }
 	void DoWarmup(int Seconds)
 	{
-		if(m_GameState==IGS_WARMUP_GAME)
-			SetGameState(IGS_WARMUP_GAME, 0);
-		else
-			SetGameState(IGS_WARMUP_USER, Seconds);
+		SetGameState(IGS_WARMUP_USER, Seconds);
+	}
+	void AbortWarmup()
+	{
+		if((m_GameState == IGS_WARMUP_GAME || m_GameState == IGS_WARMUP_USER)
+			&& m_GameStateTimer != TIMER_INFINITE)
+		{
+			SetGameState(IGS_GAME_RUNNING);
+		}
 	}
 	void SwapTeamscore();
 
@@ -209,11 +221,13 @@ public:
 	// info
 	void CheckGameInfo();
 	bool IsFriendlyFire(int ClientID1, int ClientID2) const;
+	bool IsFriendlyTeamFire(int Team1, int Team2) const;
 	bool IsGamePaused() const { return m_GameState == IGS_GAME_PAUSED || m_GameState == IGS_START_COUNTDOWN; }
 	bool IsGameRunning() const { return m_GameState == IGS_GAME_RUNNING; }
 	bool IsPlayerReadyMode() const;
 	bool IsTeamChangeAllowed() const;
 	bool IsTeamplay() const { return m_GameFlags&GAMEFLAG_TEAMS; }
+	bool IsSurvival() const { return m_GameFlags&GAMEFLAG_SURVIVAL; }
 
 	const char *GetGameType() const { return m_pGameType; }
 
@@ -233,6 +247,9 @@ public:
 
 	int GetRealPlayerNum() const { return m_aTeamSize[TEAM_RED]+m_aTeamSize[TEAM_BLUE]; }
 	int GetStartTeam();
+
+	//static void Com_Example(IConsole::IResult *pResult, void *pContext);
+	virtual void RegisterChatCommands(CCommandManager *pManager);
 };
 
 #endif

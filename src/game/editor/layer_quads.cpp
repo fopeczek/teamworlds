@@ -81,7 +81,7 @@ CQuad *CLayerQuads::NewQuad()
 void CLayerQuads::BrushSelecting(CUIRect Rect)
 {
 	// draw selection rectangle
-	vec4 RectColor = HexToRgba(g_Config.m_EdColorSelectionQuad);
+	vec4 RectColor = HexToRgba(m_pEditor->Config()->m_EdColorSelectionQuad);
 	IGraphics::CLineItem Array[4] = {
 		IGraphics::CLineItem(Rect.x, Rect.y, Rect.x+Rect.w, Rect.y),
 		IGraphics::CLineItem(Rect.x+Rect.w, Rect.y, Rect.x+Rect.w, Rect.y+Rect.h),
@@ -190,13 +190,11 @@ void CLayerQuads::GetSize(float *w, float *h) const
 	{
 		for(int p = 0; p < 5; p++)
 		{
-			*w = max(*w, fx2f(m_lQuads[i].m_aPoints[p].x));
-			*h = max(*h, fx2f(m_lQuads[i].m_aPoints[p].y));
+			*w = maximum(*w, fx2f(m_lQuads[i].m_aPoints[p].x));
+			*h = maximum(*h, fx2f(m_lQuads[i].m_aPoints[p].y));
 		}
 	}
 }
-
-extern int gs_SelectedPoints;
 
 int CLayerQuads::RenderProperties(CUIRect *pToolBox)
 {

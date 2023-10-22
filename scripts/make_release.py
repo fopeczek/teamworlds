@@ -3,7 +3,7 @@ from distutils.dir_util import copy_tree
 os.chdir(os.path.dirname(os.path.realpath(sys.argv[0])) + "/..")
 import twlib
 
-arguments = optparse.OptionParser(usage="usage: %prog VERSION PLATFORM [options]\n\nVERSION  - Version number\nPLATFORM - Target platform (f.e. linux_x86, linux_x86_64, osx, src, win32, win64)")
+arguments = optparse.OptionParser(usage="usage: %prog VERSION PLATFORM [options]\n\nVERSION  - Version number\nPLATFORM - Target platform (f.e. linux_x86, linux_x86_64, macos, src, win32, win64)")
 arguments.add_option("-l", "--url-languages", default = "http://github.com/teeworlds/teeworlds-translation/archive/master.zip", help = "URL from which the teeworlds language files will be downloaded")
 arguments.add_option("-m", "--url-maps", default = "http://github.com/teeworlds/teeworlds-maps/archive/master.zip", help = "URL from which the teeworlds maps files will be downloaded")
 arguments.add_option("-s", "--source-dir", help = "Source directory which is used for building the package")
@@ -18,7 +18,7 @@ if options.source_dir != None:
 		exit(1)
 	os.chdir(options.source_dir)
 
-valid_platforms = ["win32", "win64", "osx", "linux_x86", "linux_x86_64", "src"]
+valid_platforms = ["win32", "win64", "macos", "linux_x86", "linux_x86_64", "src"]
 
 name = "teeworlds"
 version = sys.argv[1]
@@ -45,7 +45,7 @@ elif platform == 'win32' or platform == 'win64':
 	exe_ext = ".exe"
 	use_zip = 1
 	use_gz = 0
-elif platform == 'osx':
+elif platform == 'macos':
 	use_dmg = 1
 	use_gz = 0
 	use_bundle = 1
@@ -85,7 +85,13 @@ def clean():
 		os.remove(src_package_languages)
 		os.remove(src_package_maps)
 	except: pass
-	
+
+def shell(cmd):
+	if os.system(cmd) != 0:
+		clean()
+		print("Non zero exit code on: os.system(%s)" % cmd)
+		sys.exit(1)
+
 package = "%s-%s-%s" %(name, version, platform)
 package_dir = package
 
@@ -136,7 +142,7 @@ if include_data and not use_bundle:
 if include_exe and not use_bundle:
 	shutil.copy(source_package_dir+name+exe_ext, package_dir)
 	shutil.copy(source_package_dir+name+"_srv"+exe_ext, package_dir)
-	
+
 if include_src:
 	for p in ["src", "scripts", "datasrc", "other", "objs"]:
 		os.mkdir(os.path.join(package_dir, p))
@@ -154,7 +160,7 @@ if use_bundle:
 			if os.path.isfile(fname):
 				to_lipo.append(fname)
 		if to_lipo:
-			os.system("lipo -create -output "+bin+" "+" ".join(to_lipo))
+			shell("lipo -create -output "+bin+" "+" ".join(to_lipo))
 
 	# create Teeworlds appfolder
 	clientbundle_content_dir = os.path.join(package_dir, "Teeworlds.app/Contents")
@@ -173,13 +179,13 @@ if use_bundle:
 	copy_tree(maps_dir, clientbundle_resource_dir+"/data/maps")
 	shutil.copy("other/icons/Teeworlds.icns", clientbundle_resource_dir)
 	shutil.copy(source_package_dir+name+exe_ext, clientbundle_bin_dir)
-	os.system("install_name_tool -change /usr/local/opt/freetype/lib/libfreetype.6.dylib @executable_path/../Frameworks/libfreetype.6.dylib " + binary_path)
-	os.system("install_name_tool -change /usr/local/opt/sdl2/lib/libSDL2-2.0.0.dylib @executable_path/../Frameworks/libSDL2-2.0.0.dylib  " + binary_path)
-	os.system("cp /usr/local/opt/freetype/lib/libfreetype.6.dylib " + clientbundle_framework_dir)
-	os.system("cp /usr/local/opt/libpng/lib/libpng16.16.dylib " + clientbundle_framework_dir)
-	os.system("cp /usr/local/opt/sdl2/lib/libSDL2-2.0.0.dylib " + clientbundle_framework_dir)
-	os.system("install_name_tool -change /usr/local/opt/libpng/lib/libpng16.16.dylib @executable_path/../Frameworks/libpng16.16.dylib " + freetypelib_path)
-	file(os.path.join(clientbundle_content_dir, "Info.plist"), "w").write("""
+	shell("install_name_tool -change /usr/local/opt/freetype/lib/libfreetype.6.dylib @executable_path/../Frameworks/libfreetype.6.dylib " + binary_path)
+	shell("install_name_tool -change /usr/local/opt/sdl2/lib/libSDL2-2.0.0.dylib @executable_path/../Frameworks/libSDL2-2.0.0.dylib  " + binary_path)
+	shell("cp /usr/local/opt/freetype/lib/libfreetype.6.dylib " + clientbundle_framework_dir)
+	shell("cp /usr/local/opt/libpng/lib/libpng16.16.dylib " + clientbundle_framework_dir)
+	shell("cp /usr/local/opt/sdl2/lib/libSDL2-2.0.0.dylib " + clientbundle_framework_dir)
+	shell("install_name_tool -change /usr/local/opt/libpng/lib/libpng16.16.dylib @executable_path/../Frameworks/libpng16.16.dylib " + freetypelib_path)
+	open(os.path.join(clientbundle_content_dir, "Info.plist"), "w").write("""
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -205,7 +211,7 @@ if use_bundle:
 </dict>
 </plist>
 	""" % (version))
-	file(os.path.join(clientbundle_content_dir, "PkgInfo"), "w").write("APPL????")
+	open(os.path.join(clientbundle_content_dir, "PkgInfo"), "w").write("APPL????")
 
 	# create Teeworlds Server appfolder
 	serverbundle_content_dir = os.path.join(package_dir, "Teeworlds Server.app/Contents")
@@ -222,7 +228,7 @@ if use_bundle:
 	shutil.copy("other/icons/Teeworlds_srv.icns", serverbundle_resource_dir)
 	shutil.copy(source_package_dir+name+"_srv"+exe_ext, serverbundle_bin_dir)
 	shutil.copy(source_package_dir+"serverlaunch"+exe_ext, serverbundle_bin_dir + "/"+name+"_server")
-	file(os.path.join(serverbundle_content_dir, "Info.plist"), "w").write("""
+	open(os.path.join(serverbundle_content_dir, "Info.plist"), "w").write("""
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -244,7 +250,7 @@ if use_bundle:
 </dict>
 </plist>
 	""" % (version))
-	file(os.path.join(serverbundle_content_dir, "PkgInfo"), "w").write("APPL????")
+	open(os.path.join(serverbundle_content_dir, "PkgInfo"), "w").write("APPL????")
 
 if use_zip:
 	print("making zip archive")
@@ -256,18 +262,18 @@ if use_zip:
 			zf.write(n, n)
 	#zf.printdir()
 	zf.close()
-	
+
 if use_gz:
 	print("making tar.gz archive")
-	os.system("tar czf %s.tar.gz %s" % (package, package_dir))
+	shell("tar czf %s.tar.gz %s" % (package, package_dir))
 
 if use_dmg:
 	print("making disk image")
-	os.system("rm -f %s.dmg %s_temp.dmg" % (package, package))
-	os.system("hdiutil create -srcfolder %s -volname Teeworlds -quiet %s_temp" % (package_dir, package))
-	os.system("hdiutil convert %s_temp.dmg -format UDBZ -o %s.dmg -quiet" % (package, package))
-	os.system("rm -f %s_temp.dmg" % package)
+	shell("rm -f %s.dmg %s_temp.dmg" % (package, package))
+	shell("hdiutil create -srcfolder %s -volname Teeworlds -quiet %s_temp" % (package_dir, package))
+	shell("hdiutil convert %s_temp.dmg -format UDBZ -o %s.dmg -quiet" % (package, package))
+	shell("rm -f %s_temp.dmg" % package)
 
 clean()
-	
+
 print("done")

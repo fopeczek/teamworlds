@@ -9,24 +9,22 @@ class CEffects : public CComponent
 	bool m_Add50hz;
 	bool m_Add100hz;
 
-	int m_DamageTaken;
-	float m_DamageTakenTick;
+	int m_aDamageTaken[MAX_CLIENTS];
+	float m_aDamageTakenTick[MAX_CLIENTS];
 public:
 	CEffects();
 
-	virtual void OnRender();
-
-	void BulletTrail(vec2 Pos);
+	void AirJump(vec2 Pos);
+	void DamageIndicator(vec2 Pos, int Amount, float Angle, int ClientID);
+	void PowerupShine(vec2 Pos, vec2 Size);
 	void SmokeTrail(vec2 Pos, vec2 Vel);
 	void SkidTrail(vec2 Pos, vec2 Vel);
-	void Explosion(vec2 Pos);
-	void HammerHit(vec2 Pos);
-	void AirJump(vec2 Pos);
-	void DamageIndicator(vec2 Pos, int Amount);
+	void BulletTrail(vec2 Pos);
 	void PlayerSpawn(vec2 Pos);
 	void PlayerDeath(vec2 Pos, int ClientID);
-	void PowerupShine(vec2 Pos, vec2 Size);
+	void Explosion(vec2 Pos);
+	void HammerHit(vec2 Pos);
 
-	void Update();
+	virtual void OnRender();
 };
 #endif

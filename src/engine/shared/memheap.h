@@ -29,6 +29,7 @@ public:
 	CHeap();
 	~CHeap();
 	void Reset();
-	void *Allocate(unsigned Size);
+	void *Allocate(unsigned int Size);
+	const char *StoreString(const char *pSrc);
 };
 #endif

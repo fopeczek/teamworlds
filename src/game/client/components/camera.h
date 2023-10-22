@@ -16,7 +16,7 @@ public:
 		POS_DEMOS,
 		POS_SETTINGS_GENERAL, // order here should be the same like enum for settings pages in menu
 		POS_SETTINGS_PLAYER,
-		POS_SETTINGS_TEE,
+		POS_SETTINGS_TBD, // TODO: change removed tee page to something else
 		POS_SETTINGS_CONTROLS,
 		POS_SETTINGS_GRAPHICS,
 		POS_SETTINGS_SOUND,
@@ -28,9 +28,9 @@ public:
 	virtual void OnRender();
 
 	void ChangePosition(int PositionNumber);
-	int GetCurrentPosition();
-	const vec2 *GetCenter() const { return &m_Center; };
-	float GetZoom() const { return m_Zoom; };
+	int GetCurrentPosition() const { return m_CurrentPosition; }
+	const vec2 *GetCenter() const { return &m_Center; }
+	float GetZoom() const { return m_Zoom; }
 
 	static void ConSetPosition(IConsole::IResult *pResult, void *pUserData);
 

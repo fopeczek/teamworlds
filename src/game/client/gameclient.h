@@ -9,6 +9,7 @@
 #include <game/layers.h>
 #include <game/gamecore.h>
 #include "render.h"
+#include "ui.h"
 
 class CGameClient : public IGameClient
 {
@@ -37,6 +38,7 @@ class CGameClient : public IGameClient
 	class ITextRender *m_pTextRender;
 	class IClient *m_pClient;
 	class ISound *m_pSound;
+	class CConfig *m_pConfig;
 	class IConsole *m_pConsole;
 	class IStorage *m_pStorage;
 	class IDemoPlayer *m_pDemoPlayer;
@@ -44,6 +46,7 @@ class CGameClient : public IGameClient
 	class IServerBrowser *m_pServerBrowser;
 	class IEditor *m_pEditor;
 	class IFriends *m_pFriends;
+	class IBlacklist *m_pBlacklist;
 
 	CLayers m_Layers;
 	class CCollision m_Collision;
@@ -56,14 +59,21 @@ class CGameClient : public IGameClient
 	int m_PredictedTick;
 	int m_LastNewPredictedTick;
 
+	int m_LastGameStartTick;
+	int m_LastFlagCarrierRed;
+	int m_LastFlagCarrierBlue;
+
 	static void ConTeam(IConsole::IResult *pResult, void *pUserData);
 	static void ConKill(IConsole::IResult *pResult, void *pUserData);
 	static void ConReadyChange(IConsole::IResult *pResult, void *pUserData);
 	static void ConchainSkinChange(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainFriendUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
+	static void ConchainBlacklistUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainXmasHatUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 
 	void EvolveCharacter(CNetObj_Character *pCharacter, int Tick);
+
+	void LoadFonts();
 
 public:
 	IKernel *Kernel() { return IInterface::Kernel(); }
@@ -74,20 +84,22 @@ public:
 	class ISound *Sound() const { return m_pSound; }
 	class IInput *Input() const { return m_pInput; }
 	class IStorage *Storage() const { return m_pStorage; }
+	class CConfig *Config() const { return m_pConfig; }
 	class IConsole *Console() { return m_pConsole; }
 	class ITextRender *TextRender() const { return m_pTextRender; }
 	class IDemoPlayer *DemoPlayer() const { return m_pDemoPlayer; }
 	class IDemoRecorder *DemoRecorder() const { return m_pDemoRecorder; }
 	class IServerBrowser *ServerBrowser() const { return m_pServerBrowser; }
 	class CRenderTools *RenderTools() { return &m_RenderTools; }
-	class CLayers *Layers() { return &m_Layers; };
-	class CCollision *Collision() { return &m_Collision; };
+	class CLayers *Layers() { return &m_Layers; }
+	class CCollision *Collision() { return &m_Collision; }
 	class IEditor *Editor() { return m_pEditor; }
 	class IFriends *Friends() { return m_pFriends; }
+	class IBlacklist *Blacklist() { return m_pBlacklist; }
 
-	const char *NetobjFailedOn() { return m_NetObjHandler.FailedObjOn(); };
-	int NetobjNumFailures() { return m_NetObjHandler.NumObjFailures(); };
-	const char *NetmsgFailedOn() { return m_NetObjHandler.FailedMsgOn(); };
+	const char *NetobjFailedOn() { return m_NetObjHandler.FailedObjOn(); }
+	int NetobjNumFailures() { return m_NetObjHandler.NumObjFailures(); }
+	const char *NetmsgFailedOn() { return m_NetObjHandler.FailedMsgOn(); }
 
 	bool m_SuppressEvents;
 
@@ -107,9 +119,27 @@ public:
 
 	vec2 m_LocalCharacterPos;
 
-	// predicted players
-	CCharacterCore m_PredictedPrevChar;
-	CCharacterCore m_PredictedChar;
+	// Whether we should use/render predicted entities. Depends on client
+	// and game state.
+	bool ShouldUsePredicted() const;
+
+	// Whether we should use/render predictions for a specific `ClientID`.
+	// Should check `ShouldUsePredicted` before checking this.
+	bool ShouldUsePredictedChar(int ClientID) const;
+
+	// Replaces `pPrevChar`, `pPlayerChar`, and `IntraTick` with their predicted
+	// counterparts for `ClientID`. Should check `ShouldUsePredictedChar`
+	// before using this.
+	void UsePredictedChar(
+		CNetObj_Character *pPrevChar,
+		CNetObj_Character *pPlayerChar,
+		float *IntraTick,
+		int ClientID
+	) const;
+
+	vec2 GetCharPos(int ClientID, bool Predicted = false) const;
+
+	// ---
 
 	struct CPlayerInfoItem
 	{
@@ -129,12 +159,14 @@ public:
 		const CNetObj_GameData *m_pGameData;
 		const CNetObj_GameDataTeam *m_pGameDataTeam;
 		const CNetObj_GameDataFlag *m_pGameDataFlag;
+		const CNetObj_GameDataRace *m_pGameDataRace;
 		int m_GameDataFlagSnapID;
 
 		int m_NotReadyCount;
 		int m_AliveCount[NUM_TEAMS];
 
 		const CNetObj_PlayerInfo *m_paPlayerInfos[MAX_CLIENTS];
+		const CNetObj_PlayerInfoRace *m_paPlayerInfosRace[MAX_CLIENTS];
 		CPlayerInfoItem m_aInfoByScore[MAX_CLIENTS];
 
 		// spectate data
@@ -168,10 +200,10 @@ public:
 	// client data
 	struct CClientData
 	{
-		char m_aName[MAX_NAME_LENGTH];
-		char m_aClan[MAX_CLAN_LENGTH];
+		char m_aName[MAX_NAME_ARRAY_SIZE];
+		char m_aClan[MAX_CLAN_ARRAY_SIZE];
 		int m_Country;
-		char m_aaSkinPartNames[NUM_SKINPARTS][24];
+		char m_aaSkinPartNames[NUM_SKINPARTS][MAX_SKIN_ARRAY_SIZE];
 		int m_aUseCustomColors[NUM_SKINPARTS];
 		int m_aSkinPartColors[NUM_SKINPARTS];
 		int m_SkinPartIDs[NUM_SKINPARTS];
@@ -179,9 +211,12 @@ public:
 		int m_Emoticon;
 		int m_EmoticonStart;
 		CCharacterCore m_Predicted;
+		CCharacterCore m_PrevPredicted;
 
 		CTeeRenderInfo m_SkinInfo; // this is what the server reports
 		CTeeRenderInfo m_RenderInfo; // this is what we use
+
+		CNetObj_Character m_Evolved;
 
 		float m_Angle;
 		bool m_Active;
@@ -196,11 +231,12 @@ public:
 	CClientData m_aClients[MAX_CLIENTS];
 	int m_LocalClientID;
 	int m_TeamCooldownTick;
-	bool m_MuteServerBroadcast;
 	float m_TeamChangeTime;
 	bool m_IsXmasDay;
 	float m_LastSkinChangeTime;
+	int m_IdentityState;
 	bool m_IsEasterDay;
+	bool m_InitComplete;
 
 	struct CGameInfo
 	{
@@ -226,32 +262,6 @@ public:
 		int m_PlayerSlots;
 	} m_ServerSettings;
 
-	// stats
-	class CClientStats
-	{
-	public:
-		CClientStats();
-		
-		int m_JoinDate;
-
-		int m_aFragsWith[NUM_WEAPONS];
-		int m_aDeathsFrom[NUM_WEAPONS];
-		int m_Frags;
-		int m_Deaths;
-		int m_Suicides;
-		int m_BestSpree;
-		int m_CurrentSpree;
-
-		int m_FlagGrabs;
-		int m_FlagCaptures;
-		int m_CarriersKilled;
-		int m_KillsCarrying;
-		int m_DeathsCarrying;
-
-		void Reset();
-	};
-	CClientStats m_aStats[MAX_CLIENTS];
-
 	CRenderTools m_RenderTools;
 
 	void OnReset();
@@ -276,27 +286,28 @@ public:
 	virtual void OnGameOver();
 	virtual void OnStartGame();
 
-	// stats hooks
-	int m_LastGameOver;
-	int m_LastRoundStartTick;
-	void OnGameRestart();
-	void OnRoundStart();
-	void OnFlagGrab(int Id);
-
 	virtual const char *GetItemName(int Type) const;
 	virtual const char *Version() const;
 	virtual const char *NetVersion() const;
 	virtual const char *NetVersionHashUsed() const;
 	virtual const char *NetVersionHashReal() const;
 	virtual int ClientVersion() const;
-	static void GetPlayerLabel(char* aBuf, int BufferSize, int ClientID, const char* ClientName);
+	void GetPlayerLabel(char* aBuf, int BufferSize, int ClientID, const char* ClientName);
+	void StartRendering();
+
 	bool IsXmas() const;
 	bool IsEaster() const;
+	int RacePrecision() const { return m_Snap.m_pGameDataRace ? m_Snap.m_pGameDataRace->m_Precision : 3; }
+	bool IsWorldPaused() const { return m_Snap.m_pGameData && (m_Snap.m_pGameData->m_GameStateFlags&(GAMESTATEFLAG_PAUSED|GAMESTATEFLAG_ROUNDOVER|GAMESTATEFLAG_GAMEOVER)); }
+	bool IsDemoPlaybackPaused() const;
+	float GetAnimationPlaybackSpeed() const;
 
 	//
 	void DoEnterMessage(const char *pName, int ClientID, int Team);
 	void DoLeaveMessage(const char *pName, int ClientID, const char *pReason);
 	void DoTeamChangeMessage(const char *pName, int ClientID, int Team);
+
+	int GetClientID(const char *pName);
 
 	// actions
 	// TODO: move these
@@ -330,6 +341,10 @@ public:
 	class CMapLayers *m_pMapLayersBackGround;
 	class CMapLayers *m_pMapLayersForeGround;
 };
+
+
+void FormatTime(char *pBuf, int Size, int Time, int Precision);
+void FormatTimeDiff(char *pBuf, int Size, int Time, int Precision, bool ForceSign = true);
 
 const char *Localize(const char *pStr, const char *pContext="")
 GNUC_ATTRIBUTE((format_arg(1)));

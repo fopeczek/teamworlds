@@ -12,7 +12,7 @@ CFlag::CFlag(CGameWorld *pGameWorld, int Team, vec2 StandPos, int MapID)
 	m_Team = Team;
 	m_StandPos = StandPos;
 
-	GameServer()->m_World.InsertEntity(this);
+	GameWorld()->InsertEntity(this);
 
 	Reset();
 }
@@ -67,7 +67,7 @@ void CFlag::TickDefered()
 			}
 			else
 			{
-				m_Vel.y += GameServer()->m_World.m_Core.m_Tuning.m_Gravity;
+				m_Vel.y += GameWorld()->m_Core.m_Tuning.m_Gravity;
 				GameServer()->Collision(GetMapID())->MoveBox(&m_Pos, &m_Vel, vec2(ms_PhysSize, ms_PhysSize), 0.5f);
 			}
 		}
@@ -93,7 +93,7 @@ void CFlag::Snap(int SnappingClient)
 	if(!pFlag)
 		return;
 
-	pFlag->m_X = (int)m_Pos.x;
-	pFlag->m_Y = (int)m_Pos.y;
+	pFlag->m_X = round_to_int(m_Pos.x);
+	pFlag->m_Y = round_to_int(m_Pos.y);
 	pFlag->m_Team = m_Team;
 }

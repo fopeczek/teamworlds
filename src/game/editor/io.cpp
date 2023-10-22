@@ -66,9 +66,9 @@ int CEditorMap::Save(class IStorage *pStorage, const char *pFileName)
 	{
 		CEditorImage *pImg = m_lImages[i];
 
-		// analyse the image for when saving (should be done when we load the image)
+		// analyze the image for when saving (should be done when we load the image)
 		// TODO!
-		pImg->AnalyseTileFlags();
+		pImg->AnalyzeTileFlags();
 
 		CMapItemImage Item;
 		Item.m_Version = CMapItemImage::CURRENT_VERSION;
@@ -128,6 +128,7 @@ int CEditorMap::Save(class IStorage *pStorage, const char *pFileName)
 				CMapItemLayerTilemap Item;
 				Item.m_Version = CMapItemLayerTilemap::CURRENT_VERSION;
 
+				Item.m_Layer.m_Version = 0; // unused
 				Item.m_Layer.m_Flags = pLayer->m_Flags;
 				Item.m_Layer.m_Type = pLayer->m_Type;
 
@@ -157,6 +158,7 @@ int CEditorMap::Save(class IStorage *pStorage, const char *pFileName)
 				{
 					CMapItemLayerQuads Item;
 					Item.m_Version = CMapItemLayerQuads::CURRENT_VERSION;
+					Item.m_Layer.m_Version = 0; // unused
 					Item.m_Layer.m_Flags = pLayer->m_Flags;
 					Item.m_Layer.m_Type = pLayer->m_Type;
 					Item.m_Image = pLayer->m_Image;
@@ -181,7 +183,7 @@ int CEditorMap::Save(class IStorage *pStorage, const char *pFileName)
 
 	// check for bezier curve envelopes, otherwise use older, smaller envelope points
 	int Version = CMapItemEnvelope_v2::CURRENT_VERSION;
-	int Size = sizeof(CEnvPoint_v1);	
+	int Size = sizeof(CEnvPoint_v1);
 	for(int e = 0; e < m_lEnvelopes.size(); e++)
 	{
 		for(int p = 0; p < m_lEnvelopes[e]->m_lPoints.size(); p++)
@@ -213,7 +215,7 @@ int CEditorMap::Save(class IStorage *pStorage, const char *pFileName)
 
 	// save points
 	int TotalSize = Size * PointCount;
-	unsigned char *pPoints = (unsigned char *)mem_alloc(TotalSize, 1);
+	unsigned char *pPoints = (unsigned char *)mem_alloc(TotalSize);
 	int Offset = 0;
 	for(int e = 0; e < m_lEnvelopes.size(); e++)
 	{
@@ -303,7 +305,7 @@ int CEditorMap::Load(class IStorage *pStorage, const char *pFileName, int Storag
 
 				if(pItem->m_External || (pItem->m_Version > 1 && pItem->m_Format != CImageInfo::FORMAT_RGB && pItem->m_Format != CImageInfo::FORMAT_RGBA))
 				{
-					char aBuf[256];
+					char aBuf[IO_MAX_PATH_LENGTH];
 					str_format(aBuf, sizeof(aBuf),"mapres/%s.png", pName);
 
 					// load external
@@ -321,12 +323,12 @@ int CEditorMap::Load(class IStorage *pStorage, const char *pFileName, int Storag
 					pImg->m_Width = pItem->m_Width;
 					pImg->m_Height = pItem->m_Height;
 					pImg->m_Format = pItem->m_Version == 1 ? CImageInfo::FORMAT_RGBA : pItem->m_Format;
-					int PixelSize = pImg->m_Format == CImageInfo::FORMAT_RGB ? 3 : 4;
 
 					// copy image data
+					const int DataSize = pImg->m_Width * pImg->m_Height * pImg->GetPixelSize();
 					void *pData = DataFile.GetData(pItem->m_ImageData);
-					pImg->m_pData = mem_alloc(pImg->m_Width*pImg->m_Height*PixelSize, 1);
-					mem_copy(pImg->m_pData, pData, pImg->m_Width*pImg->m_Height*PixelSize);
+					pImg->m_pData = mem_alloc(DataSize);
+					mem_copy(pImg->m_pData, pData, DataSize);
 					pImg->m_Texture = m_pEditor->Graphics()->LoadTextureRaw(pImg->m_Width, pImg->m_Height, pImg->m_Format, pImg->m_pData, CImageInfo::FORMAT_AUTO, IGraphics::TEXLOAD_MULTI_DIMENSION);
 				}
 
@@ -421,7 +423,7 @@ int CEditorMap::Load(class IStorage *pStorage, const char *pFileName, int Storag
 							pTiles->ExtractTiles((CTile *)pData);
 						else
 							mem_copy(pTiles->m_pTiles, pData, pTiles->m_Width*pTiles->m_Height*sizeof(CTile));
-						
+
 
 						if(pTiles->m_Game && pTilemapItem->m_Version == MakeVersion(1, *pTilemapItem))
 						{
@@ -476,7 +478,8 @@ int CEditorMap::Load(class IStorage *pStorage, const char *pFileName, int Storag
 			for(int e = 0; e < Num; e++)
 			{
 				CMapItemEnvelope *pItem = (CMapItemEnvelope *)DataFile.GetItem(Start+e, 0, 0);
-				CEnvelope *pEnv = new CEnvelope(pItem->m_Channels);
+				const int Channels = minimum(pItem->m_Channels, 4);
+				CEnvelope *pEnv = new CEnvelope(Channels);
 				pEnv->m_lPoints.set_size(pItem->m_NumPoints);
 				for(int n = 0; n < pItem->m_NumPoints; n++)
 				{
@@ -488,17 +491,14 @@ int CEditorMap::Load(class IStorage *pStorage, const char *pFileName, int Storag
 					{
 						// backwards compatibility
 						CEnvPoint_v1 *pEnvPoint_v1 = &((CEnvPoint_v1 *)pEnvPoints)[pItem->m_StartPoint + n];
+						mem_zero((void*)&pEnv->m_lPoints[n], sizeof(CEnvPoint));
 
 						pEnv->m_lPoints[n].m_Time = pEnvPoint_v1->m_Time;
 						pEnv->m_lPoints[n].m_Curvetype = pEnvPoint_v1->m_Curvetype;
 
-						for(int c = 0; c < pItem->m_Channels; c++)
+						for(int c = 0; c < Channels; c++)
 						{
 							pEnv->m_lPoints[n].m_aValues[c] = pEnvPoint_v1->m_aValues[c];
-							pEnv->m_lPoints[n].m_aInTangentdx[c] = 0;
-							pEnv->m_lPoints[n].m_aInTangentdy[c] = 0;
-							pEnv->m_lPoints[n].m_aOutTangentdx[c] = 0;
-							pEnv->m_lPoints[n].m_aOutTangentdy[c] = 0;
 						}
 					}
 				}

@@ -3,6 +3,7 @@
 #ifndef ENGINE_SHARED_CONSOLE_H
 #define ENGINE_SHARED_CONSOLE_H
 
+#include <new>
 #include <engine/console.h>
 #include "memheap.h"
 
@@ -11,6 +12,7 @@ class CConsole : public IConsole
 	class CCommand : public CCommandInfo
 	{
 	public:
+		CCommand(bool BasicAccess) : CCommandInfo(BasicAccess) {}
 		CCommand *m_pNext;
 		int m_Flags;
 		bool m_Temp;
@@ -45,15 +47,20 @@ class CConsole : public IConsole
 	};
 
 	CExecFile *m_pFirstExec;
+	class CConfig *m_pConfig;
 	class IStorage *m_pStorage;
 	int m_AccessLevel;
 
 	CCommand *m_pRecycleList;
 	CHeap m_TempCommands;
 
+	void TraverseChain(FCommandCallback *ppfnCallback, void **ppUserData);
+
 	static void Con_Chain(IResult *pResult, void *pUserData);
 	static void Con_Echo(IResult *pResult, void *pUserData);
 	static void Con_Exec(IResult *pResult, void *pUserData);
+	static void Con_EvalIf(IResult *pResult, void *pUserData);
+	static void Con_EvalIfCmd(IResult *pResult, void *pUserData);
 	static void ConToggle(IResult *pResult, void *pUser);
 	static void ConToggleStroke(IResult *pResult, void *pUser);
 	static void ConModCommandAccess(IResult *pResult, void *pUser);
@@ -120,6 +127,15 @@ class CConsole : public IConsole
 	int ParseStart(CResult *pResult, const char *pString, int Length);
 	int ParseArgs(CResult *pResult, const char *pFormat);
 
+	/*
+	This function will set pFormat to the next parameter (i,s,r,v,?) it contains and
+	pNext to the command.
+	Descriptions in brackets like [file] will be skipped.
+	Returns true on failure.
+	Expects pFormat to point at a parameter.
+	*/
+	bool NextParam(char *pNext, const char *&pFormat);
+
 	class CExecutionQueue
 	{
 		CHeap m_Queue;
@@ -128,8 +144,7 @@ class CConsole : public IConsole
 		struct CQueueEntry
 		{
 			CQueueEntry *m_pNext;
-			FCommandCallback m_pfnCommandCallback;
-			void *m_pCommandUserData;
+			CCommand *m_pCommand;
 			CResult m_Result;
 		} *m_pFirst, *m_pLast;
 
@@ -161,7 +176,6 @@ class CConsole : public IConsole
 	};
 
 	CHeap *m_pTempMapListHeap;
-	int m_NumMapListEntries;
 	CMapListEntryTemp *m_pFirstMapEntry;
 	CMapListEntryTemp *m_pLastMapEntry;
 
@@ -169,10 +183,11 @@ public:
 	CConsole(int FlagMask);
 	~CConsole();
 
+	virtual void Init();
 	virtual const CCommandInfo *FirstCommandInfo(int AccessLevel, int FlagMask) const;
 	virtual const CCommandInfo *GetCommandInfo(const char *pName, int FlagMask, bool Temp);
-	virtual void PossibleCommands(const char *pStr, int FlagMask, bool Temp, FPossibleCallback pfnCallback, void *pUser);
-	virtual void PossibleMaps(const char *pStr, FPossibleCallback pfnCallback, void *pUser);
+	virtual int PossibleCommands(const char *pStr, int FlagMask, bool Temp, FPossibleCallback pfnCallback, void *pUser);
+	virtual int PossibleMaps(const char *pStr, FPossibleCallback pfnCallback, void *pUser);
 
 	virtual void ParseArguments(int NumArgs, const char **ppArguments);
 	virtual void Register(const char *pName, const char *pParams, int Flags, FCommandCallback pfnFunc, void *pUser, const char *pHelp);
@@ -185,14 +200,17 @@ public:
 	virtual void Chain(const char *pName, FChainCommandCallback pfnChainFunc, void *pUser);
 	virtual void StoreCommands(bool Store);
 
+	virtual bool ArgStringIsValid(const char *pFormat);
 	virtual bool LineIsValid(const char *pStr);
 	virtual void ExecuteLine(const char *pStr);
 	virtual void ExecuteLineFlag(const char *pStr, int FlagMask);
-	virtual void ExecuteFile(const char *pFilename);
+	virtual bool ExecuteFile(const char *pFilename);
 
 	virtual int RegisterPrintCallback(int OutputLevel, FPrintCallback pfnPrintCallback, void *pUserData);
 	virtual void SetPrintOutputLevel(int Index, int OutputLevel);
 	virtual void Print(int Level, const char *pFrom, const char *pStr, bool Highlighted=false);
+
+	virtual int ParseCommandArgs(const char *pArgs, const char *pFormat, FCommandCallback pfnCallback, void *pContext);
 
 	void SetAccessLevel(int AccessLevel) { m_AccessLevel = clamp(AccessLevel, (int)(ACCESS_LEVEL_ADMIN), (int)(ACCESS_LEVEL_MOD)); }
 };

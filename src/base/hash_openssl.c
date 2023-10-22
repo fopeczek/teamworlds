@@ -1,3 +1,5 @@
+/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
+/* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #if defined(CONF_OPENSSL)
 #include "hash_ctxt.h"
 
@@ -15,6 +17,23 @@ SHA256_DIGEST sha256_finish(SHA256_CTX *ctxt)
 {
 	SHA256_DIGEST result;
 	SHA256_Final(result.data, ctxt);
+	return result;
+}
+
+void md5_init(MD5_CTX *ctxt)
+{
+	MD5_Init(ctxt);
+}
+
+void md5_update(MD5_CTX *ctxt, const void *data, size_t data_len)
+{
+	MD5_Update(ctxt, data, data_len);
+}
+
+MD5_DIGEST md5_finish(MD5_CTX *ctxt)
+{
+	MD5_DIGEST result;
+	MD5_Final(result.data, ctxt);
 	return result;
 }
 #endif

@@ -17,6 +17,11 @@ public:
 	//character's size
 	static const int ms_PhysSize = 28;
 
+    enum
+    {
+        MIN_KILLMESSAGE_CLIENTVERSION=0x0704,   // todo 0.8: remove me
+    };
+
 	CCharacter(CGameWorld *pWorld, int MapID);
 
 	virtual void Reset();
@@ -65,7 +70,7 @@ private:
 	bool m_Alive;
 
 	// weapon info
-	CEntity *m_apHitObjects[10];
+	CEntity *m_apHitObjects[MAX_PLAYERS];
 	int m_NumObjectsHit;
 
 	struct WeaponStat

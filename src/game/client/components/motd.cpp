@@ -36,21 +36,33 @@ void CMotd::OnRender()
 	if(!IsActive())
 		return;
 
-	float Width = 400*3.0f*Graphics()->ScreenAspect();
-	float Height = 400*3.0f;
+	const float Height = 400.0f * 3.0f;
+	const float Width = Height * Graphics()->ScreenAspect();
 
 	Graphics()->MapScreen(0, 0, Width, Height);
 
-	float h = 800.0f;
+	const int MaxLines = 24;
+	const float TextSize = 32.0f;
+
+	float h = MaxLines * TextSize + 2 * 25.0f;
 	float w = 650.0f;
 	float x = Width/2 - w/2;
 	float y = 150.0f;
 	CUIRect Rect = {x, y, w, h};
 
 	Graphics()->BlendNormal();
-	RenderTools()->DrawRoundRect(&Rect, vec4(0.0f, 0.0f, 0.0f, 0.5f), 40.0f);
+	Rect.Draw(vec4(0.0f, 0.0f, 0.0f, 0.5f), 30.0f);
 
-	TextRender()->Text(0, x+40.0f, y+40.0f, 32.0f, m_aServerMotd, w-80.0f);
+	Rect.Margin(25.0f, &Rect);
+
+	m_ServerMotdCursor.m_Flags = TEXTFLAG_ALLOW_NEWLINE | TEXTFLAG_WORD_WRAP | TEXTFLAG_ELLIPSIS;
+	m_ServerMotdCursor.m_FontSize = TextSize;
+	m_ServerMotdCursor.m_MaxWidth = Rect.w;
+	m_ServerMotdCursor.m_MaxLines = MaxLines;
+
+	m_ServerMotdCursor.Reset(m_ServerMotdTime);
+	m_ServerMotdCursor.MoveTo(Rect.x, Rect.y);
+	TextRender()->TextOutlined(&m_ServerMotdCursor, m_aServerMotd, -1);
 }
 
 void CMotd::OnMessage(int MsgType, void *pRawMsg)
@@ -77,8 +89,8 @@ void CMotd::OnMessage(int MsgType, void *pRawMsg)
 			}
 		}
 
-		if(m_aServerMotd[0] && g_Config.m_ClMotdTime)
-			m_ServerMotdTime = time_get()+time_freq()*g_Config.m_ClMotdTime;
+		if(m_aServerMotd[0] && Config()->m_ClMotdTime)
+			m_ServerMotdTime = time_get()+time_freq()*Config()->m_ClMotdTime;
 		else
 			m_ServerMotdTime = 0;
 	}

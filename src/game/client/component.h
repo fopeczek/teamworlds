@@ -23,6 +23,7 @@ protected:
 	class CUI *UI() const { return m_pClient->UI(); }
 	class ISound *Sound() const { return m_pClient->Sound(); }
 	class CRenderTools *RenderTools() const { return m_pClient->RenderTools(); }
+	class CConfig *Config() const { return m_pClient->Config(); }
 	class IConsole *Console() const { return m_pClient->Console(); }
 	class IDemoPlayer *DemoPlayer() const { return m_pClient->DemoPlayer(); }
 	class IDemoRecorder *DemoRecorder() const { return m_pClient->DemoRecorder(); }
@@ -32,16 +33,17 @@ protected:
 public:
 	virtual ~CComponent() {}
 
-	virtual void OnStateChange(int NewState, int OldState) {};
-	virtual void OnConsoleInit() {};
-	virtual void OnInit() {};
-	virtual void OnShutdown() {};
-	virtual void OnReset() {};
-	virtual void OnRender() {};
-	virtual void OnRelease() {};
-	virtual void OnMapLoad() {};
+	virtual void OnStateChange(int NewState, int OldState) {}
+	virtual void OnConsoleInit() {}
+	virtual int GetInitAmount() const { return 0; } // Amount of progress reported by this component during OnInit
+	virtual void OnInit() {}
+	virtual void OnShutdown() {}
+	virtual void OnReset() {}
+	virtual void OnRender() {}
+	virtual void OnRelease() {}
+	virtual void OnMapLoad() {}
 	virtual void OnMessage(int Msg, void *pRawMsg) {}
-	virtual bool OnMouseMove(float x, float y) { return false; }
+	virtual bool OnCursorMove(float x, float y, int CursorType) { return false; }
 	virtual bool OnInput(IInput::CEvent e) { return false; }
 };
 

@@ -193,7 +193,7 @@ void AddServer(NETADDR *pInfo, ServerType Type)
 	// see if server already exists in list
 	for(int i = 0; i < m_NumServers; i++)
 	{
-		if(net_addr_comp(&m_aServers[i].m_Address, pInfo) == 0)
+		if(net_addr_comp(&m_aServers[i].m_Address, pInfo, true) == 0)
 		{
 			char aAddrStr[NETADDR_MAXSTRSIZE];
 			net_addr_str(pInfo, aAddrStr, sizeof(aAddrStr), true);
@@ -280,36 +280,35 @@ void ReloadBans()
 	m_pConsole->ExecuteFile("master.cfg");
 }
 
-int main(int argc, const char **argv) // ignore_convention
+int main(int argc, const char **argv)
 {
-	int64 LastBuild = 0, LastBanReload = 0;
-	ServerType Type = SERVERTYPE_INVALID;
-	NETADDR BindAddr;
-
 	dbg_logger_stdout();
-	net_init();
+	cmdline_fix(&argc, &argv);
 
 	mem_copy(m_CountData.m_Header, SERVERBROWSE_COUNT, sizeof(SERVERBROWSE_COUNT));
 
 	int FlagMask = CFGFLAG_MASTER;
 	IKernel *pKernel = IKernel::Create();
 	IStorage *pStorage = CreateStorage("Teeworlds", IStorage::STORAGETYPE_BASIC, argc, argv);
-	IConfig *pConfig = CreateConfig();
+	IConfigManager *pConfigManager = CreateConfigManager();
+	CConfig *pConfig = pConfigManager->Values();
 	m_pConsole = CreateConsole(FlagMask);
-	
+
 	bool RegisterFail = !pKernel->RegisterInterface(pStorage);
 	RegisterFail |= !pKernel->RegisterInterface(m_pConsole);
-	RegisterFail |= !pKernel->RegisterInterface(pConfig);
+	RegisterFail |= !pKernel->RegisterInterface(pConfigManager);
 
 	if(RegisterFail)
 		return -1;
 
-	pConfig->Init(FlagMask);
+	pConfigManager->Init(FlagMask);
+	m_pConsole->Init();
 	m_NetBan.Init(m_pConsole, pStorage);
-	if(argc > 1) // ignore_convention
-		m_pConsole->ParseArguments(argc-1, &argv[1]); // ignore_convention
+	if(argc > 1)
+		m_pConsole->ParseArguments(argc-1, &argv[1]);
 
-	if(g_Config.m_Bindaddr[0] && net_host_lookup(g_Config.m_Bindaddr, &BindAddr, NETTYPE_ALL) == 0)
+	NETADDR BindAddr;
+	if(pConfig->m_Bindaddr[0] && net_host_lookup(pConfig->m_Bindaddr, &BindAddr, NETTYPE_ALL) == 0)
 	{
 		// got bindaddr
 		BindAddr.type = NETTYPE_ALL;
@@ -322,13 +321,18 @@ int main(int argc, const char **argv) // ignore_convention
 		BindAddr.port = MASTERSERVER_PORT;
 	}
 
-	if(!m_NetOp.Open(BindAddr, 0))
+	if(secure_random_init() != 0)
+	{
+		dbg_msg("mastersrv", "could not initialize secure RNG");
+		return -1;
+	}
+	if(!m_NetOp.Open(BindAddr, pConfig, m_pConsole, 0, 0))
 	{
 		dbg_msg("mastersrv", "couldn't start network (op)");
 		return -1;
 	}
 	BindAddr.port = MASTERSERVER_PORT+1;
-	if(!m_NetChecker.Open(BindAddr, 0))
+	if(!m_NetChecker.Open(BindAddr, pConfig, m_pConsole, 0, 0))
 	{
 		dbg_msg("mastersrv", "couldn't start network (checker)");
 		return -1;
@@ -339,6 +343,8 @@ int main(int argc, const char **argv) // ignore_convention
 
 	dbg_msg("mastersrv", "started");
 
+	int64 LastBuild = 0, LastBanReload = 0;
+	ServerType Type = SERVERTYPE_INVALID;
 	while(1)
 	{
 		m_NetOp.Update();
@@ -415,8 +421,8 @@ int main(int argc, const char **argv) // ignore_convention
 				// remove it from checking
 				for(int i = 0; i < m_NumCheckServers; i++)
 				{
-					if(net_addr_comp(&m_aCheckServers[i].m_Address, &Packet.m_Address) == 0 ||
-						net_addr_comp(&m_aCheckServers[i].m_AltAddress, &Packet.m_Address) == 0)
+					if(net_addr_comp(&m_aCheckServers[i].m_Address, &Packet.m_Address, true) == 0 ||
+						net_addr_comp(&m_aCheckServers[i].m_AltAddress, &Packet.m_Address, true) == 0)
 					{
 						Type = m_aCheckServers[i].m_Type;
 						m_NumCheckServers--;
@@ -454,5 +460,6 @@ int main(int argc, const char **argv) // ignore_convention
 		thread_sleep(1);
 	}
 
+	cmdline_free(argc, argv);
 	return 0;
 }

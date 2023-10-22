@@ -6,7 +6,7 @@
 #include <base/system.h>
 
 /*
-	Connection diagram - How the initilization works.
+	Connection diagram - How the initialization works.
 
 	Client -> INFO -> Server
 		Contains version info, name, and some other info.
@@ -20,7 +20,7 @@
 		modc_connected is called on the client and
 		mods_connected is called on the server.
 		The client should call client_entergame when the
-		mod has done it's initilization.
+		mod has done it's initialization.
 
 	Client -> ENTERGAME -> Server
 		Tells the server to start sending snapshots.
@@ -52,8 +52,8 @@ enum
 	NETMSG_RCON_CMD_ADD,
 	NETMSG_RCON_CMD_REM,
 
-	NETMSG_AUTH_CHALLANGE,	//
-	NETMSG_AUTH_RESULT,		//
+	NETMSG_AUTH_CHALLENGE,	// unused
+	NETMSG_AUTH_RESULT,		// unused
 
 	// sent by client
 	NETMSG_READY,			//
@@ -63,13 +63,13 @@ enum
 	NETMSG_RCON_AUTH,		//
 	NETMSG_REQUEST_MAP_DATA,//
 
-	NETMSG_AUTH_START,		//
-	NETMSG_AUTH_RESPONSE,	//
+	NETMSG_AUTH_START,		// unused
+	NETMSG_AUTH_RESPONSE,	// unused
 
 	// sent by both
 	NETMSG_PING,
 	NETMSG_PING_REPLY,
-	NETMSG_ERROR,
+	NETMSG_ERROR,			// unused
 
 	NETMSG_MAPLIST_ENTRY_ADD,// todo 0.8: move up
 	NETMSG_MAPLIST_ENTRY_REM,
@@ -80,6 +80,7 @@ enum
 {
 	SERVER_TICK_SPEED=50,
 	SERVERINFO_FLAG_PASSWORD = 0x1,
+	SERVERINFO_FLAG_TIMESCORE = 0x2,
 	SERVERINFO_LEVEL_MIN=0,
 	SERVERINFO_LEVEL_MAX=2,
 
@@ -90,7 +91,11 @@ enum
 	MAX_SNAPSHOT_PACKSIZE=900,
 
 	MAX_NAME_LENGTH=16,
+	MAX_NAME_ARRAY_SIZE=MAX_NAME_LENGTH*UTF8_BYTE_LENGTH+1,
 	MAX_CLAN_LENGTH=12,
+	MAX_CLAN_ARRAY_SIZE=MAX_CLAN_LENGTH*UTF8_BYTE_LENGTH+1,
+	MAX_SKIN_LENGTH=24,
+	MAX_SKIN_ARRAY_SIZE=MAX_SKIN_LENGTH*UTF8_BYTE_LENGTH+1,
 
 	// message packing
 	MSGFLAG_VITAL=1,
