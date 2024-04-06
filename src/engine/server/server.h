@@ -135,7 +135,7 @@ public:
 		int m_Authed;
 		int m_AuthTries;
 
-        Class m_Class;
+        CPlayerClass m_PlayerClass;
 
         bool m_Smile;
 
@@ -245,7 +245,7 @@ public:
 	int ClientMapID(int ClientID) const override;
 
 
-    virtual Class GetClientClass(int ClientID);
+    virtual CPlayerClass GetClientClass(int ClientID);
     virtual void SetClientClass(int ClientID, Class who);
 
     virtual bool GetClientSmile(int ClientID);

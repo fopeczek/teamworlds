@@ -215,7 +215,7 @@ public:
 		CCharacterCore m_Predicted;
 		CCharacterCore m_PrevPredicted;
 
-        Class m_Class;
+        CPlayerClass m_Class;
 
 		CTeeRenderInfo m_SkinInfo; // this is what the server reports
 		CTeeRenderInfo m_RenderInfo; // this is what we use

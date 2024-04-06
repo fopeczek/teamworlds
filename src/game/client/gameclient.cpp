@@ -856,7 +856,7 @@ void CGameClient::OnMessage(int MsgId, CUnpacker *pUnpacker)
 		str_utf8_copy_num(m_aClients[pMsg->m_ClientID].m_aName, pMsg->m_pName, sizeof(m_aClients[pMsg->m_ClientID].m_aName), MAX_NAME_LENGTH);
 		str_utf8_copy_num(m_aClients[pMsg->m_ClientID].m_aClan, pMsg->m_pClan, sizeof(m_aClients[pMsg->m_ClientID].m_aClan), MAX_CLAN_LENGTH);
 		m_aClients[pMsg->m_ClientID].m_Country = pMsg->m_Country;
-        m_aClients[pMsg->m_ClientID].m_Class = GetClass(pMsg->m_ClassID);
+        m_aClients[pMsg->m_ClientID].m_Class = CPlayerClass(pMsg->m_ClassID);
 		for(int i = 0; i < NUM_SKINPARTS; i++)
 		{
 			str_utf8_copy_num(m_aClients[pMsg->m_ClientID].m_aaSkinPartNames[i], pMsg->m_apSkinPartNames[i], sizeof(m_aClients[pMsg->m_ClientID].m_aaSkinPartNames[i]), MAX_SKIN_LENGTH);

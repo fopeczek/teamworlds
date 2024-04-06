@@ -81,7 +81,7 @@ bool CWall::HitCharacter() {
             return false;
 
         int Player_HP = pHit->m_Health + pHit->m_Armor;
-        if (Server()->GetClientClass(pHit->GetPlayer()->GetCID()) != Class::Tank) {
+        if (!Server()->GetClientClass(pHit->GetPlayer()->GetCID()).IsClass(Class::Tank)) {
             int repeat=maximum(round(Player_HP * 0.1f + 0.5f), 1.f);
             for (int i = 0; i < repeat; i++) {
                 if (pHit->m_Health>0) {

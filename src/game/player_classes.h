@@ -15,9 +15,28 @@ enum class Class {
     class_count
 };
 
-int GetClassID(Class aClass);
+class CPlayerClass {
+public:
+    CPlayerClass(int ClassID = (int) Class::None);
+
+    bool IsClass(int ClassID) const;
+
+    bool IsClass(Class Class) const;
+
+    Class m_Class;
+};
+
 Class GetClass(int ClassID);
 
-static constexpr int MAX_ACTIVE_SPIDER_WEBS=6*5;//shotgun shoots 5 walls every shot
-static constexpr int MAX_ACTIVE_ENGINEER_WALLS= 2*2;
-static constexpr int MIN_SPIDER_SENSE_DISTANCE= 400;
+int GetClassID(Class Class);
+
+static constexpr int MAX_ACTIVE_SPIDER_WEBS = 6 * 5;//shotgun shoots 5 walls every shot
+static constexpr int MAX_ACTIVE_ENGINEER_WALLS = 2 * 2;
+static constexpr int MIN_SPIDER_SENSE_DISTANCE = 400;
+
+static constexpr float TANK_GROUND_ACCELERATION = 0.7f;
+static constexpr float TANK_AIR_ACCELERATION = 0.4f;
+static constexpr float TANK_JUMP_FACTOR = 0.7f;
+static constexpr float TANK_HOOK_Y_FACTOR = 0.35f;
+static constexpr float TANK_HOOK_X_FACTOR = 0.3f;
+static constexpr float TANK_HOOK_DRAG_FACTOR = 0.5f;

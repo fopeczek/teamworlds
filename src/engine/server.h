@@ -50,7 +50,7 @@ public:
 	virtual int GetClientVersion(int ClientID) const = 0;
 	virtual int ClientMapID(int ClientID) const = 0;
 
-    virtual Class GetClientClass(int ClientID) = 0;
+    virtual CPlayerClass GetClientClass(int ClientID) = 0;
     virtual void SetClientClass(int ClientID, Class who) = 0;
 
     virtual bool GetClientSmile(int ClientID) = 0;

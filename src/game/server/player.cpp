@@ -88,7 +88,7 @@ void CPlayer::Tick()
 		m_pCharacter = 0;
 	}
 
-    if (Server()->GetClientClass(GetCID()) == Class::None) {
+    if (Server()->GetClientClass(GetCID()).IsClass(Class::None)) {
         Server()->SetClientMap(GetCID(), Server()->LobbyMapID);
     } else {
         Server()->SetClientMap(GetCID(), Server()->MainMapID);
@@ -489,7 +489,7 @@ void CPlayer::TryRespawn()
 	m_pCharacter = new(m_ClientID) CCharacter(&GameServer()->m_World, MapID);
 	m_pCharacter->Spawn(this, SpawnPos);
     GameServer()->CreatePlayerSpawn(SpawnPos, MapID);
-    Become(Server()->GetClientClass(GetCID()));
+    Become(Server()->GetClientClass(GetCID()).m_Class);
 }
 
 void CPlayer::Become(Class who) {
@@ -550,6 +550,9 @@ void CPlayer::Become(Class who) {
             break;
         case Class::Necromancer:
             dbg_assert(false, "Class Necromancer is not implemented yet!");
+            break;
+        case Class::class_count:
+            dbg_assert(false, "class_count is not a class!");
             break;
     }
     //TODO add some networking
