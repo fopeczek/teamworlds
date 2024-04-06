@@ -64,15 +64,15 @@ void CMapLayers::LoadBackgroundMap()
 	char aBuf[128];
 	// check for the appropriate day/night map
 	str_format(aBuf, sizeof(aBuf), "ui/themes/%s_%s.map", pMenuMap, IsDaytime ? "day" : "night");
-	if(!m_pMenuMap->Load(aBuf, Kernel(), m_pClient->Storage()))
+	if(!m_pMenuMap->Load(aBuf, m_pClient->Storage()))
 	{
 		// fall back on generic map
 		str_format(aBuf, sizeof(aBuf), "ui/themes/%s.map", pMenuMap);
-		if(!m_pMenuMap->Load(aBuf, Kernel(), m_pClient->Storage()))
+		if(!m_pMenuMap->Load(aBuf, m_pClient->Storage()))
 		{
 			// fall back on day/night alternative map
 			str_format(aBuf, sizeof(aBuf), "ui/themes/%s_%s.map", pMenuMap, IsDaytime ? "night" : "day");
-			if(!m_pMenuMap->Load(aBuf, Kernel(), m_pClient->Storage()))
+			if(!m_pMenuMap->Load(aBuf, m_pClient->Storage()))
 			{
 				str_format(aBuf, sizeof(aBuf), "map '%s' not found", pMenuMap);
 				Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "client", aBuf);

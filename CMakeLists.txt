@@ -888,6 +888,9 @@ set(EXPECTED_DATA
   fonts/SourceHanSans.ttc
   fonts/index.json
   game.png
+  github/Lobby&weapons.png
+  github/Lobby.png
+  github/server.png
   languages/belarusian.json
   languages/bosnian.json
   languages/brazilian_portuguese.json
@@ -979,6 +982,7 @@ set(EXPECTED_DATA
   maps/dm9.map
   maps/license.txt
   maps/lms1.map
+  maps/lobby.map
   maps/readme.txt
   particles.png
   race_flag.png
@@ -1353,6 +1357,7 @@ set_src(ENGINE_SHARED GLOB src/engine/shared
 )
 set(ENGINE_GENERATED_SHARED src/generated/nethash.cpp src/generated/protocol.cpp src/generated/protocol.h)
 set_src(GAME_SHARED GLOB src/game
+  CheatList.h
   collision.cpp
   collision.h
   commands.h
@@ -1361,6 +1366,8 @@ set_src(GAME_SHARED GLOB src/game
   layers.cpp
   layers.h
   mapitems.h
+  player_classes.cpp
+  player_classes.h
   tuning.h
   variables.h
   version.h
@@ -1370,6 +1377,7 @@ set(GAME_GENERATED_SHARED
   src/generated/git_revision.cpp
   src/generated/nethash.cpp
   src/generated/protocol.h
+  src/game/CheatList.h
 )
 
 set(DEPS ${DEP_JSON} ${DEP_MD5} ${ZLIB_DEP})
@@ -1603,6 +1611,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   entities/pickup.h
   entities/projectile.cpp
   entities/projectile.h
+  entities/wall.cpp
+  entities/wall.h
   entity.cpp
   entity.h
   eventhandler.cpp
@@ -1623,8 +1633,11 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   gamemodes/mod.h
   gamemodes/tdm.cpp
   gamemodes/tdm.h
+  gamemodes/teamworlds.cpp
+  gamemodes/teamworlds.h
   gameworld.cpp
   gameworld.h
+  gameworld_fwd.h
   player.cpp
   player.h
 )
@@ -1650,6 +1663,10 @@ add_executable(${TARGET_SERVER}
   ${SERVER_ICON}
   $<TARGET_OBJECTS:engine-shared>
   $<TARGET_OBJECTS:game-shared>
+        src/game/server/entities/web.cpp
+        src/game/server/entities/web.h
+        src/game/anim_utils.cpp
+        src/game/anim_utils.h
 )
 target_link_libraries(${TARGET_SERVER} ${LIBS_SERVER})
 list(APPEND TARGETS_OWN ${TARGET_SERVER})

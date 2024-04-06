@@ -7,6 +7,8 @@
 
 #include <game/gamecore.h>
 #include <game/server/entity.h>
+#include "pickup.h"
+#include "wall.h"
 
 
 class CCharacter : public CEntity
@@ -57,15 +59,54 @@ public:
 
 	bool GiveWeapon(int Weapon, int Ammo);
 	void GiveNinja();
+    void LoseNinja();
+    void HideHunter();
+    void RevealHunter(bool Cooldown);
 
-	void SetEmote(int Emote, int Tick);
+    void Teleport(vec2 where);
+
+    void SetEmote(int Emote, int Tick);
+
+    void AddSpiderSenseHud(CCharacter *pChar);
 
 	bool IsAlive() const { return m_Alive; }
 	class CPlayer *GetPlayer() { return m_pPlayer; }
 
+    void ConRemoveAllWalls();
+
+    bool m_ShadowDimension= false;
+    bool m_ShadowDimensionCooldown= false;
+
+    int m_Tank_PistolHitTick;
+    int m_Tank_PistolShot = 0;
+
+    // the player core for the physics
+    CCharacterCore m_Core;
+
+    class CWall *m_ActiveWall;
+
+    int m_Health;
+    int m_Armor;
+
+    struct WeaponStat
+    {
+        int m_AmmoRegenStart;
+        int m_Ammo;
+        bool m_Got;
+
+    } m_aWeapons[NUM_WEAPONS];
+    int m_ActiveWeapon;
+
 private:
 	// player controlling this character
 	class CPlayer *m_pPlayer;
+
+    const float m_SpiderSenseHudDistanceFactor=20.f;
+    int m_SpiderSenseCID[MAX_PLAYERS];
+    CPickup *m_SpiderSenseHud[MAX_PLAYERS];
+    int m_SpiderSenseTick[MAX_PLAYERS];
+
+    void UpdateSpiderSenseHud();
 
 	bool m_Alive;
 
@@ -73,15 +114,6 @@ private:
 	CEntity *m_apHitObjects[MAX_PLAYERS];
 	int m_NumObjectsHit;
 
-	struct WeaponStat
-	{
-		int m_AmmoRegenStart;
-		int m_Ammo;
-		bool m_Got;
-
-	} m_aWeapons[NUM_WEAPONS];
-
-	int m_ActiveWeapon;
 	int m_LastWeapon;
 	int m_QueuedWeapon;
 
@@ -104,9 +136,6 @@ private:
 	int m_NumInputs;
 	int m_Jumped;
 
-	int m_Health;
-	int m_Armor;
-
 	int m_TriggeredEvents;
 
 	// ninja
@@ -117,9 +146,6 @@ private:
 		int m_CurrentMoveTime;
 		int m_OldVelAmount;
 	} m_Ninja;
-
-	// the player core for the physics
-	CCharacterCore m_Core;
 
 	// info for dead reckoning
 	int m_ReckoningTick; // tick that we are performing dead reckoning From

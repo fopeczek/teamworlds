@@ -794,7 +794,7 @@ const char *CClient::LoadMap(const char *pName, const char *pFilename, const SHA
 
 	SetState(IClient::STATE_LOADING);
 
-	if(!m_pMap->Load(pFilename, Kernel(), Storage()))
+	if(!m_pMap->Load(pFilename, Storage()))
 	{
 		str_format(aErrorMsg, sizeof(aErrorMsg), "map '%s' not found", pFilename);
 		return aErrorMsg;
@@ -2614,6 +2614,9 @@ int main(int argc, const char **argv)
 
 		RegisterFail = RegisterFail || !pKernel->RegisterInterface(static_cast<IEngineTextRender*>(pEngineTextRender)); // register as both
 		RegisterFail = RegisterFail || !pKernel->RegisterInterface(static_cast<ITextRender*>(pEngineTextRender));
+
+        RegisterFail = RegisterFail || !pKernel->RegisterInterface(static_cast<IEngineMap*>(pEngineMap)); // register as both
+        RegisterFail = RegisterFail || !pKernel->RegisterInterface(static_cast<IMap*>(pEngineMap));
 
 		RegisterFail = RegisterFail || !pKernel->RegisterInterface(pMapChecker);
 

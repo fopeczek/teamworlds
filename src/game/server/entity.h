@@ -6,7 +6,7 @@
 #include <base/vmath.h>
 
 #include "alloc.h"
-#include "gameworld.h"
+#include "gameworld_fwd.h"
 
 /*
 	Class: Entity
@@ -61,9 +61,9 @@ public:
 
 	/* Objects */
 	class CGameWorld *GameWorld()		{ return m_pGameWorld; }
-	class CConfig *Config()				{ return m_pGameWorld->Config(); }
-	class CGameContext *GameServer()	{ return m_pGameWorld->GameServer(); }
-	class IServer *Server()				{ return m_pGameWorld->Server(); }
+	class CConfig *Config();
+	class CGameContext *GameServer();
+	class IServer *Server();
 
 	/* Getters */
 	CEntity *TypeNext()					{ return m_pNextTypeEntity; }

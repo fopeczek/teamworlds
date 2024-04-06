@@ -21,12 +21,18 @@ public:
 	void FillInfo(CNetObj_Projectile *pProj);
 
 	int GetOwner() const { return m_Owner; }
+    int GetOwnerTeam() const { return m_OwnerTeam; }
+    int GetWeapon() const { return m_Weapon; }
+    bool GetExposive() const { return m_Explosive; }
+    int GetStartTick() const { return m_StartTick; }
 	void LoseOwner();
 
 	virtual void Reset();
 	virtual void Tick();
 	virtual void TickPaused();
 	virtual void Snap(int SnappingClient);
+
+    bool Wall_Coll = false;
 
 private:
 	vec2 m_Direction;

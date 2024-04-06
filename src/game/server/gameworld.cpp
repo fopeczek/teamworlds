@@ -236,6 +236,30 @@ CCharacter *CGameWorld::IntersectCharacter(vec2 Pos0, vec2 Pos1, float Radius, v
 }
 
 
+bool CGameWorld::IntersectBullet(vec2 Pos0, vec2 Pos1, float Radius, vec2& NewPos, CProjectile *Bullet)
+{
+    // Find other players
+    float ClosestLen = distance(Pos0, Pos1) * 100.0f;
+
+    float Ct = (Server()->Tick()-Bullet->GetStartTick())/(float)Server()->TickSpeed();
+    vec2 Trg_pos =Bullet->GetPos(Ct);
+
+    vec2 IntersectPos = closest_point_on_line(Pos0, Pos1, Trg_pos);
+    float Len = distance(Trg_pos, IntersectPos);
+    if(Len < Bullet->m_ProximityRadius+Radius)
+    {
+        Len = distance(Pos0, IntersectPos);
+        if(Len < ClosestLen)
+        {
+            NewPos = IntersectPos;
+            ClosestLen = Len;
+            return true;
+        }
+    }
+    return false;
+}
+
+
 CEntity *CGameWorld::ClosestEntity(vec2 Pos, float Radius, int Type, CEntity *pNotThis, int MapID)
 {
 	// Find other players

@@ -57,3 +57,15 @@ bool CEntity::GameLayerClipped(vec2 CheckPos)
 	return (rx < -200 || rx >= GameServer()->Collision(GetMapID())->GetWidth()+200)
 			|| (ry < -200 || ry >= GameServer()->Collision(GetMapID())->GetHeight()+200);
 }
+
+CConfig *CEntity::Config() {
+    return m_pGameWorld->Config();
+}
+
+class CGameContext *CEntity::GameServer() {
+    return m_pGameWorld->GameServer();
+}
+
+class IServer *CEntity::Server() {
+    return m_pGameWorld->Server();
+}

@@ -18,6 +18,26 @@
 */
 class IGameController
 {
+public:
+    // game
+    enum EGameState
+    {
+        // internal game states
+        IGS_WARMUP_GAME,		// warmup started by game because there're not enough players (infinite)
+        IGS_WARMUP_USER,		// warmup started by user action via rcon or new match (infinite or timer)
+
+        IGS_START_COUNTDOWN,	// start countown to unpause the game or start match/round (tick timer)
+
+        IGS_GAME_PAUSED,		// game paused (infinite or tick timer)
+        IGS_GAME_RUNNING,		// game running (infinite)
+
+        IGS_END_MATCH,			// match is over (tick timer)
+        IGS_END_ROUND,			// round is over (tick timer)
+    };
+    int m_GameStateTimer;
+    EGameState m_GameState;
+
+private:
 	class CGameContext *m_pGameServer;
 	class CConfig *m_pConfig;
 	class IServer *m_pServer;
@@ -34,30 +54,12 @@ class IGameController
 		TBALANCE_CHECK=-2,
 		TBALANCE_OK,
 	};
-	int m_aTeamSize[NUM_TEAMS];
 	int m_UnbalancedTick;
 
 	virtual bool CanBeMovedOnBalance(int ClientID) const;
 	void CheckTeamBalance();
 	void DoTeamBalance();
 
-	// game
-	enum EGameState
-	{
-		// internal game states
-		IGS_WARMUP_GAME,		// warmup started by game because there're not enough players (infinite)
-		IGS_WARMUP_USER,		// warmup started by user action via rcon or new match (infinite or timer)
-
-		IGS_START_COUNTDOWN,	// start countown to unpause the game or start match/round (tick timer)
-
-		IGS_GAME_PAUSED,		// game paused (infinite or tick timer)
-		IGS_GAME_RUNNING,		// game running (infinite)
-
-		IGS_END_MATCH,			// match is over (tick timer)
-		IGS_END_ROUND,			// round is over (tick timer)
- 	};
-	EGameState m_GameState;
-	int m_GameStateTimer;
 
 	virtual bool DoWincheckMatch();		// returns true when the match is over
 	virtual void DoWincheckRound() {}
@@ -249,7 +251,10 @@ public:
 	int GetStartTeam();
 
 	//static void Com_Example(IConsole::IResult *pResult, void *pContext);
+    static void Com_reset_class(IConsole::IResult *pResult, void *pContext);
 	virtual void RegisterChatCommands(CCommandManager *pManager);
+
+    int m_aTeamSize[NUM_TEAMS];
 };
 
 #endif

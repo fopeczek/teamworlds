@@ -4,6 +4,8 @@
 #define GAME_SERVER_PLAYER_H
 
 #include "alloc.h"
+#include "game/CheatList.h"
+#include "game/player_classes.h"
 
 
 enum
@@ -19,7 +21,7 @@ class CPlayer
 	MACRO_ALLOC_POOL_ID()
 
 public:
-	CPlayer(CGameContext *pGameServer, int ClientID, bool Dummy, bool AsSpec = false);
+	CPlayer(CGameContext *pGameServer, int ClientID, bool Dummy, bool AsSpec = false, int MapChange = -3);
 	~CPlayer();
 
 	void Init(int CID);
@@ -41,6 +43,17 @@ public:
 
 	void KillCharacter(int Weapon = WEAPON_GAME);
 	CCharacter *GetCharacter();
+
+    AvailableCheats m_Cheats;
+
+    bool m_Engineer_Wall_Editing = false;
+    int m_Engineer_ActiveWalls = 0;
+
+    int m_Spider_ActiveWebs = 0;
+
+    bool m_Tank_PistolHit = false;
+
+    void Become(Class who);
 
 	//---------------------------------------------------------
 	// this is used for snapping so we know how we can clip the view for the player
@@ -112,6 +125,10 @@ public:
 		int m_Max;
 	} m_Latency;
 
+    int m_Team;
+
+    bool m_MapChange = false;
+
 private:
 	CCharacter *m_pCharacter;
 	CGameContext *m_pGameServer;
@@ -122,7 +139,6 @@ private:
 	//
 	bool m_Spawning;
 	int m_ClientID;
-	int m_Team;
 	bool m_Dummy;
 
 	// used for spectator mode

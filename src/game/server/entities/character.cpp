@@ -10,6 +10,7 @@
 #include "character.h"
 #include "laser.h"
 #include "projectile.h"
+#include "game/player_classes.h"
 
 //input count
 struct CInputCount
@@ -67,7 +68,7 @@ bool CCharacter::Spawn(CPlayer *pPlayer, vec2 Pos)
 	m_Pos = Pos;
 
 	m_Core.Reset();
-	m_Core.Init(&GameWorld()->m_Core, GameServer()->Collision(GetMapID()), GetMapID());
+    m_Core.Init(&GameWorld()->m_Core, GameServer()->Collision(GetMapID()), pPlayer->GetTeam(), GetMapID(), Server()->GetClientClass(m_pPlayer->GetCID()));
 	m_Core.m_Pos = m_Pos;
 	GameWorld()->m_Core.m_apCharacters[m_pPlayer->GetCID()] = &m_Core;
 
@@ -79,6 +80,17 @@ bool CCharacter::Spawn(CPlayer *pPlayer, vec2 Pos)
 	m_Alive = true;
 
 	GameServer()->m_pController->OnCharacterSpawn(this);
+
+    if (Server()->GetClientClass(GetPlayer()->GetCID())==Class::Spider){
+        m_ActiveWall = new CWall (GameWorld(), m_pPlayer->GetCID(), Server()->MainMapID, true);
+    } else{
+        m_ActiveWall = new CWall (GameWorld(), m_pPlayer->GetCID(), Server()->MainMapID);
+    }
+
+    for (int i=0; i<MAX_PLAYERS;i++){
+        m_SpiderSenseHud[i]= nullptr;
+        m_SpiderSenseCID[i]=-1;
+    }
 
 	return true;
 }
@@ -247,15 +259,30 @@ void CCharacter::HandleWeaponSwitch()
 
 void CCharacter::FireWeapon()
 {
-	if(m_ReloadTimer != 0)
-		return;
+    if (m_pPlayer->m_Cheats.FullAuto and m_ActiveWeapon!=WEAPON_NINJA) {
+        m_ReloadTimer = 0;
+    }
+
+	if(m_ReloadTimer != 0) {
+        return;
+    }
 
 	DoWeaponSwitch();
 	vec2 Direction = normalize(vec2(m_LatestInput.m_TargetX, m_LatestInput.m_TargetY));
 
-	bool FullAuto = false;
-	if(m_ActiveWeapon == WEAPON_GRENADE || m_ActiveWeapon == WEAPON_SHOTGUN || m_ActiveWeapon == WEAPON_LASER)
-		FullAuto = true;
+    bool FullAuto = false;
+    if(m_ActiveWeapon == WEAPON_GRENADE || m_ActiveWeapon == WEAPON_SHOTGUN || m_ActiveWeapon == WEAPON_LASER)
+        FullAuto = true;
+
+    if (m_pPlayer->m_Cheats.FullAuto or (m_pPlayer->m_Cheats.SuperNinja and m_ActiveWeapon == WEAPON_NINJA)){
+        FullAuto = true;
+    }
+    if (Server()->GetClientClass(GetPlayer()->GetCID())==Class::Engineer and m_ActiveWeapon==WEAPON_LASER){
+        FullAuto = false;
+    }
+    if (Server()->GetClientClass(GetPlayer()->GetCID())==Class::Tank and m_ActiveWeapon==WEAPON_GUN){
+        FullAuto = true;
+    }
 
 
 	// check if we gonna fire
@@ -297,6 +324,19 @@ void CCharacter::FireWeapon()
 		{
 			GameServer()->CreateSound(m_Pos, SOUND_HAMMER_FIRE, -1, GetMapID());
 
+            CWall *apWalls[MAX_PLAYERS * MAX_ACTIVE_ENGINEER_WALLS+MAX_PLAYERS * MAX_ACTIVE_SPIDER_WEBS];
+            int manyWalls = GameWorld()->FindEntities(ProjStartPos, 10000000000.f,
+                                                      (CEntity **) apWalls,
+                                                      MAX_PLAYERS * MAX_ACTIVE_ENGINEER_WALLS+MAX_PLAYERS * MAX_ACTIVE_SPIDER_WEBS,
+                                                      CGameWorld::ENTTYPE_LASER, GetMapID());
+
+            for (int i = 0; i < manyWalls; ++i) {
+                if (apWalls[i]){
+                    apWalls[i]->HeIsHealing(m_pPlayer);
+                    apWalls[i]->HammerHit(g_pData->m_Weapons.m_Hammer.m_pBase->m_Damage, m_pPlayer);
+                }
+            }
+
 			CCharacter *apEnts[MAX_CLIENTS];
 			int Hits = 0;
 			int Num = GameWorld()->FindEntities(ProjStartPos, GetProximityRadius()*0.5f, (CEntity**)apEnts,
@@ -309,8 +349,11 @@ void CCharacter::FireWeapon()
 				if((pTarget == this) || GameServer()->Collision(GetMapID())->IntersectLine(ProjStartPos, pTarget->m_Pos, NULL, NULL))
 					continue;
 
+                if (pTarget->m_ShadowDimension){
+                    pTarget->RevealHunter(true);
+                }
+
 				// set his velocity to fast upward (for now)
-				//TODO make hammer non interdimensional
 				if(length(pTarget->m_Pos-ProjStartPos) > 0.0f)
 					GameServer()->CreateHammerHit(pTarget->m_Pos-normalize(pTarget->m_Pos-ProjStartPos)*GetProximityRadius()*0.5f, GetMapID());
 				else
@@ -343,68 +386,223 @@ void CCharacter::FireWeapon()
 				g_pData->m_Weapons.m_Gun.m_pBase->m_Damage, false, 0, -1, WEAPON_GUN, GetMapID());
 
 			GameServer()->CreateSound(m_Pos, SOUND_GUN_FIRE, -1, GetMapID());
+            if (Server()->GetClientClass(m_pPlayer->GetCID()) == Class::Tank){
+                m_Tank_PistolShot ++;
+            }
 		} break;
 
 		case WEAPON_SHOTGUN:
 		{
 			int ShotSpread = 2;
 
-			for(int i = -ShotSpread; i <= ShotSpread; ++i)
-			{
-				float Spreading[] = {-0.185f, -0.070f, 0, 0.070f, 0.185f};
-				float a = angle(Direction);
-				a += Spreading[i+2];
-				float v = 1-(absolute(i)/(float)ShotSpread);
-				float Speed = mix((float)GameServer()->Tuning()->m_ShotgunSpeeddiff, 1.0f, v);
-				new CProjectile(GameWorld(), WEAPON_SHOTGUN,
-					m_pPlayer->GetCID(),
-					ProjStartPos,
-					vec2(cosf(a), sinf(a))*Speed,
-					(int)(Server()->TickSpeed()*GameServer()->Tuning()->m_ShotgunLifetime),
-					g_pData->m_Weapons.m_Shotgun.m_pBase->m_Damage, false, 0, -1, WEAPON_SHOTGUN, GetMapID());
-			}
+            if (Server()->GetClientClass(m_pPlayer->GetCID()) == Class::Spider) {
+                if (!m_ActiveWall->FirstTryToFortify(Direction, m_pPlayer->GetCID())) {
+                    if (m_pPlayer->m_Spider_ActiveWebs < MAX_ACTIVE_SPIDER_WEBS or
+                        m_pPlayer->m_Cheats.Godmode) {
+                        if (m_ActiveWall->SpiderWeb(Direction)) {
+                            m_ActiveWall = new CWall(GameWorld(), m_pPlayer->GetCID(), GetMapID(), true);
+                            for (int i = -ShotSpread; i <= ShotSpread; ++i) {
+                                //                  middle  | middle right   |   middle left       | right end   | left end
+                                float Spreading[] = {0, 0.070f * 3.5f, -0.070f * 3.5f, 0.185f * 3.5f,
+                                                     -0.185f * 3.5f};
+                                float a = angle(Direction);
+                                a += Spreading[i + 2];
+                                float v = 1 - (absolute(i) / (float) ShotSpread);
+                                float Speed = mix((float) GameServer()->Tuning()->m_ShotgunSpeeddiff, 1.0f, v);
 
-			GameServer()->CreateSound(m_Pos, SOUND_SHOTGUN_FIRE, -1, GetMapID());
+                                if (i != -2) {
+                                    if (m_pPlayer->m_Spider_ActiveWebs < MAX_ACTIVE_SPIDER_WEBS or
+                                        m_pPlayer->m_Cheats.Godmode) {
+                                        if (m_ActiveWall->SpiderWeb(vec2(cosf(a), sinf(a)) * Speed)) {
+                                            m_ActiveWall = new CWall(GameWorld(), m_pPlayer->GetCID(), GetMapID(),
+                                                                     true);
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            GameServer()->CreateSound(m_Pos, SOUND_WEAPON_NOAMMO, -1, GetMapID());
+                        }
+                    } else {
+                        GameServer()->CreateSound(m_Pos, SOUND_WEAPON_NOAMMO, -1, GetMapID());
+                    }
+                }
+            } else if (Server()->GetClientClass(m_pPlayer->GetCID()) != Class::Spider) {
+
+                for (int i = -ShotSpread; i <= ShotSpread; ++i) {
+                    float Spreading[] = {-0.185f, -0.070f, 0, 0.070f, 0.185f};
+                    float a = angle(Direction);
+                    a += Spreading[i + 2];
+                    float v = 1 - (absolute(i) / (float) ShotSpread);
+                    float Speed = mix((float) GameServer()->Tuning()->m_ShotgunSpeeddiff, 1.0f, v);
+                    new CProjectile(GameWorld(), WEAPON_SHOTGUN,
+                                    m_pPlayer->GetCID(),
+                                    ProjStartPos,
+                                    vec2(cosf(a), sinf(a)) * Speed,
+                                    (int) (Server()->TickSpeed() * GameServer()->Tuning()->m_ShotgunLifetime),
+                                    g_pData->m_Weapons.m_Shotgun.m_pBase->m_Damage, false, 0, -1, WEAPON_SHOTGUN,
+                                    GetMapID());
+                }
+
+                GameServer()->CreateSound(m_Pos, SOUND_SHOTGUN_FIRE, -1, GetMapID());
+            }
 		} break;
 
 		case WEAPON_GRENADE:
 		{
-			new CProjectile(GameWorld(), WEAPON_GRENADE,
-				m_pPlayer->GetCID(),
-				ProjStartPos,
-				Direction,
-				(int)(Server()->TickSpeed()*GameServer()->Tuning()->m_GrenadeLifetime),
-				g_pData->m_Weapons.m_Grenade.m_pBase->m_Damage, true, 0, SOUND_GRENADE_EXPLODE, WEAPON_GRENADE, GetMapID());
+            if (Server()->GetClientClass(GetPlayer()->GetCID())==Class::Scout){
+                new CProjectile(GameWorld(), WEAPON_GRENADE,
+                                m_pPlayer->GetCID(),
+                                ProjStartPos,
+                                Direction,
+                                (int)(Server()->TickSpeed()*GameServer()->Tuning()->m_GrenadeLifetime),
+                                g_pData->m_Weapons.m_Grenade.m_pBase->m_Damage/2, true, 1.5f, SOUND_GRENADE_EXPLODE, WEAPON_GRENADE, GetMapID());
+            }else {
+                new CProjectile(GameWorld(), WEAPON_GRENADE,
+                                m_pPlayer->GetCID(),
+                                ProjStartPos,
+                                Direction,
+                                (int) (Server()->TickSpeed() * GameServer()->Tuning()->m_GrenadeLifetime),
+                                g_pData->m_Weapons.m_Grenade.m_pBase->m_Damage, true, 0, SOUND_GRENADE_EXPLODE,
+                                WEAPON_GRENADE, GetMapID());
+            }
 
 			GameServer()->CreateSound(m_Pos, SOUND_GRENADE_FIRE, -1, GetMapID());
 		} break;
 
 		case WEAPON_LASER:
 		{
-			new CLaser(GameWorld(), m_Pos, Direction, GameServer()->Tuning()->m_LaserReach, m_pPlayer->GetCID(), GetMapID());
-			GameServer()->CreateSound(m_Pos, SOUND_LASER_FIRE, -1, GetMapID());
+            if (Server()->GetClientClass(GetPlayer()->GetCID())==Class::Engineer) {
+                if(m_pPlayer->m_Engineer_ActiveWalls < MAX_ACTIVE_ENGINEER_WALLS or m_pPlayer->m_Cheats.Godmode){
+                    if (m_pPlayer->m_Engineer_Wall_Editing) {
+                        int amm=m_aWeapons[m_ActiveWeapon].m_Ammo;
+                        if (m_aWeapons[m_ActiveWeapon].m_Ammo>4) {
+                            amm =5;
+                        }else{
+                            amm=m_aWeapons[m_ActiveWeapon].m_Ammo;
+                        }
+                        if (m_ActiveWall->EndWallEdit(amm)) {
+                            m_pPlayer->m_Engineer_ActiveWalls++;
+                            m_pPlayer->m_Engineer_Wall_Editing = false;
+                            if (!m_pPlayer->m_Cheats.AllWeapons) {
+                                m_aWeapons[m_ActiveWeapon].m_Ammo -= amm;
+                            }
+                            m_ActiveWall = new CWall(GameWorld(), m_pPlayer->GetCID(), GetMapID());
+                        } else {
+                            GameServer()->CreateSound(m_Pos, SOUND_WEAPON_NOAMMO, -1, GetMapID());
+                            return;
+                        }
+                    } else {
+                        if(!m_ActiveWall->Created) {
+                            m_ActiveWall->StartWallEdit(Direction);
+                            m_pPlayer->m_Engineer_Wall_Editing = true;
+                        }
+                    }
+                    GameServer()->CreateSound(m_Pos, SOUND_LASER_FIRE, -1, GetMapID());
+                } else{
+                    GameServer()->CreateSound(m_Pos, SOUND_WEAPON_NOAMMO, -1, GetMapID());
+                    return;
+                }
+            } else {
+                new CLaser(GameWorld(), m_Pos, Direction, GameServer()->Tuning()->m_LaserReach, m_pPlayer->GetCID(), GetMapID());
+                GameServer()->CreateSound(m_Pos, SOUND_LASER_FIRE, -1, GetMapID());
+            }
 		} break;
 
 		case WEAPON_NINJA:
 		{
-			m_NumObjectsHit = 0;
+            m_NumObjectsHit = 0;
 
-			m_Ninja.m_ActivationDir = Direction;
-			m_Ninja.m_CurrentMoveTime = g_pData->m_Weapons.m_Ninja.m_Movetime * Server()->TickSpeed() / 1000;
-			m_Ninja.m_OldVelAmount = length(m_Core.m_Vel);
+            m_Ninja.m_ActivationDir = Direction;
+            m_Ninja.m_CurrentMoveTime = g_pData->m_Weapons.m_Ninja.m_Movetime * Server()->TickSpeed() / 1000;
+            m_Ninja.m_OldVelAmount = length(m_Core.m_Vel);
 
-			GameServer()->CreateSound(m_Pos, SOUND_NINJA_FIRE, -1, GetMapID());
+            if (Server()->GetClientClass(m_pPlayer->GetCID())==Class::Hunter){
+                m_Ninja.m_CurrentMoveTime = -1;
+                if (m_ShadowDimension) {
+                    RevealHunter(false);
+                } else {
+                    if ((m_ShadowDimensionCooldown and m_Ninja.m_ActivationTick>=Server()->Tick()) or !m_ShadowDimensionCooldown){
+                        bool too_close = false;
+                        bool hooked = false;
+                        for (int i = 0; i < MAX_PLAYERS; ++i) {
+                            if (i != GetPlayer()->GetCID()) {
+                                if (GameServer()->m_apPlayers[i]) {
+                                    if (GameServer()->m_apPlayers[i]->GetCharacter()) {
+                                        if (GameServer()->m_apPlayers[i]->GetTeam()!=m_pPlayer->GetTeam()) {
+                                            if (distance(GameServer()->m_apPlayers[i]->GetCharacter()->GetPos(), m_Pos) <=
+                                                400.f) {
+                                                too_close= true;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (m_Core.m_HookState==HOOK_GRABBED) {
+                            if (m_Core.m_HookedPlayer){
+                                if (Server()->ClientIngame(m_Core.m_HookedPlayer)){
+                                    if (GameServer()->GetClientTeam(m_Core.m_HookedPlayer)!=m_pPlayer->GetTeam()){
+                                        hooked= true;
+                                    }
+                                }
+                            }
+                        }
+                        if (hooked or too_close) {
+                            GameServer()->CreateSound(m_Pos, SOUND_WEAPON_NOAMMO, -1, GetMapID());
+                        } else {
+                            HideHunter();
+                        }
+                    } else {
+                        GameServer()->CreateSound(m_Pos, SOUND_WEAPON_NOAMMO, -1, GetMapID());
+                    }
+                }
+            } else{
+                GameServer()->CreateSound(m_Pos, SOUND_NINJA_FIRE, -1, GetMapID());
+            }
 		} break;
 
 	}
 
-	m_AttackTick = Server()->Tick();
+    m_AttackTick = Server()->Tick();
 
-	if(m_aWeapons[m_ActiveWeapon].m_Ammo > 0) // -1 == unlimited
-		m_aWeapons[m_ActiveWeapon].m_Ammo--;
+    if(m_aWeapons[m_ActiveWeapon].m_Ammo > 0) { // -1 == unlimited
+        bool take_ammo = true;
+        if (Server()->GetClientClass(GetPlayer()->GetCID()) == Class::Engineer) {
+            if (m_ActiveWeapon == WEAPON_LASER) {
+                take_ammo= false;
+            }
+        }else if (Server()->GetClientClass(GetPlayer()->GetCID())== Class::Spider){
+            if (m_ActiveWeapon == WEAPON_SHOTGUN){
+                take_ammo= false;
+            }
+        }
+        if (m_pPlayer->m_Cheats.AllWeapons){
+            take_ammo= false;
+        }
+        if (Server()->GetClientClass(GetPlayer()->GetCID())== Class::Tank){
+            if (m_ActiveWeapon == WEAPON_GUN){
+                if (m_Tank_PistolShot == 3 and !m_pPlayer->m_Cheats.AllWeapons){
+                    m_aWeapons[m_ActiveWeapon].m_Ammo--;
+                    m_Tank_PistolShot=0;
+                }
+                take_ammo= false;
+            }
+        }
+        if (take_ammo) {
+            m_aWeapons[m_ActiveWeapon].m_Ammo--;
+        }
+    }
 
-	if(!m_ReloadTimer)
-		m_ReloadTimer = g_pData->m_Weapons.m_aId[m_ActiveWeapon].m_Firedelay * Server()->TickSpeed() / 1000;
+    if(!m_ReloadTimer) {
+        m_ReloadTimer = g_pData->m_Weapons.m_aId[m_ActiveWeapon].m_Firedelay * Server()->TickSpeed() / 1000;
+        if (Server()->GetClientClass(GetPlayer()->GetCID())== Class::Tank and m_ActiveWeapon == WEAPON_GUN){
+            m_ReloadTimer = g_pData->m_Weapons.m_aId[m_ActiveWeapon].m_Firedelay * Server()->TickSpeed() / 1000 - 2;
+        }
+        if (m_pPlayer->m_Cheats.SuperNinja and m_ActiveWeapon == WEAPON_NINJA) {
+            m_ReloadTimer = 300.f * Server()->TickSpeed() / 1000;
+        }
+    }
 }
 
 void CCharacter::HandleWeapons()
@@ -472,6 +670,19 @@ void CCharacter::GiveNinja()
 	GameServer()->CreateSound(m_Pos, SOUND_PICKUP_NINJA, -1, GetMapID());
 }
 
+void CCharacter::LoseNinja()
+{
+    m_aWeapons[WEAPON_NINJA].m_Got = false;
+    m_ActiveWeapon = m_LastWeapon;
+
+    // reset velocity and current move
+    if(m_Ninja.m_CurrentMoveTime > 0)
+        m_Core.m_Vel = m_Ninja.m_ActivationDir*m_Ninja.m_OldVelAmount;
+    m_Ninja.m_CurrentMoveTime = -1;
+
+    SetWeapon(m_ActiveWeapon);
+}
+
 void CCharacter::SetEmote(int Emote, int Tick)
 {
 	m_EmoteType = Emote;
@@ -502,10 +713,12 @@ void CCharacter::OnDirectInput(CNetObj_PlayerInput *pNewInput)
 	if(m_LatestInput.m_TargetX == 0 && m_LatestInput.m_TargetY == 0)
 		m_LatestInput.m_TargetY = -1;
 
-	if(m_NumInputs > 2 && m_pPlayer->GetTeam() != TEAM_SPECTATORS)
+    if(m_NumInputs > 2 && m_pPlayer->GetTeam() != TEAM_SPECTATORS and Server()->GetClientClass(GetPlayer()->GetCID()) != Class::None and GetMapID()!=Server()->LobbyMapID)
 	{
-		HandleWeaponSwitch();
-		FireWeapon();
+        if (!m_pPlayer->m_Cheats.LockWeapons) {
+            HandleWeaponSwitch();
+            FireWeapon();
+        }
 	}
 
 	mem_copy(&m_LatestPrevInput, &m_LatestInput, sizeof(m_LatestInput));
@@ -523,10 +736,126 @@ void CCharacter::ResetInput()
 	m_LatestPrevInput = m_LatestInput = m_Input;
 }
 
+void CCharacter::Teleport(vec2 where){
+    m_Pos=where;
+    m_Core.m_Pos=where;
+    m_Core.m_Vel=vec2(0,0);
+    Tick();
+}
+
+void CCharacter::RevealHunter(bool Cooldown){
+    if(!m_pPlayer->m_Cheats.Godmode) {
+        m_ShadowDimension = false;
+        m_ShadowDimensionCooldown = Cooldown;
+        GameServer()->CreateSound(m_Pos, SOUND_PICKUP_NINJA, -1, GetMapID());
+    }
+}
+
+void CCharacter::HideHunter(){
+    if(!m_pPlayer->m_Cheats.Godmode) {
+        m_ShadowDimension = true;
+        m_ShadowDimensionCooldown = false;
+        m_Ninja.m_ActivationTick = clamp(m_Ninja.m_ActivationTick, 0, Server()->Tick());
+        GameServer()->CreateSound(m_Pos, SOUND_NINJA_FIRE, -1, GetMapID());
+    }
+}
+
+void CCharacter::AddSpiderSenseHud(CCharacter *pChar){
+    if (Server()->GetClientClass(m_pPlayer->GetCID())==Class::Spider) {
+        vec2 Dir(pChar->GetPos().x - m_Pos.x, pChar->GetPos().y - m_Pos.y);
+        const float R = length(Dir);
+        for (int i = 0; i < MAX_PLAYERS; i++) {
+            if (m_SpiderSenseCID[i] == pChar->m_pPlayer->GetCID()){
+                return;
+            }
+            if (!m_SpiderSenseHud[i]) {
+                m_SpiderSenseHud[i] = new CPickup(GameWorld(), PICKUP_HEALTH,
+                                                  m_Pos + Dir / R * 100.f,
+                                                  GetMapID(), false, m_pPlayer->m_Team);
+                m_SpiderSenseTick[i] = Server()->Tick();
+                m_SpiderSenseCID[i] = pChar->m_pPlayer->GetCID();
+                return;
+            }
+        }
+    }
+}
+
+void CCharacter::UpdateSpiderSenseHud() {
+    for (int i=0; i<MAX_PLAYERS; i++) {
+        if (m_SpiderSenseHud[i]) {
+            if (Server()->Tick() < m_SpiderSenseTick[i] + 500.f) {
+                if (GameServer()->GetPlayerChar(m_SpiderSenseCID[i])) {
+                    if (distance(m_SpiderSenseHud[i]->GetPos(), GameServer()->GetPlayerChar(m_SpiderSenseCID[i])->GetPos()) > MIN_SPIDER_SENSE_DISTANCE) {
+                        vec2 Direction(GameServer()->GetPlayerChar(m_SpiderSenseCID[i])->GetPos().x - m_Pos.x,
+                                       GameServer()->GetPlayerChar(m_SpiderSenseCID[i])->GetPos().y - m_Pos.y);
+                        const float Distance = length(Direction);
+                        const float Factor = Distance / m_SpiderSenseHudDistanceFactor;
+                        vec2 Offset(Direction.x / Distance * Factor, Direction.y / Distance * Factor);
+                        m_SpiderSenseHud[i]->SetPos(m_Pos + Offset);
+                    } else {
+                        if (m_SpiderSenseHud[i]) {
+                            m_SpiderSenseHud[i]->Destroy();
+                            m_SpiderSenseHud[i] = nullptr;
+                            m_SpiderSenseCID[i] = -1;
+                            m_SpiderSenseTick[i]=0;
+                        }
+                    }
+                } else {
+                    if (m_SpiderSenseHud[i]) {
+                        m_SpiderSenseHud[i]->Destroy();
+                        m_SpiderSenseHud[i] = nullptr;
+                        m_SpiderSenseCID[i] = -1;
+                        m_SpiderSenseTick[i]=0;
+                    }
+                }
+            } else {
+                if (!m_pPlayer->m_Cheats.Godmode) {
+                    if (m_SpiderSenseHud[i]) {
+                        m_SpiderSenseHud[i]->Destroy();
+                        m_SpiderSenseHud[i] = nullptr;
+                        m_SpiderSenseCID[i] = -1;
+                        m_SpiderSenseTick[i] = 0;
+                    }
+                }
+            }
+        }
+    }
+}
+
 void CCharacter::Tick()
 {
+    if(m_Health<10 and m_pPlayer->m_Cheats.Godmode){
+        m_Health=10;
+    }
+    if(m_Armor<10 and m_pPlayer->m_Cheats.Godmode){
+        m_Armor=10;
+    }
+    if (m_pPlayer->m_Cheats.AllWeapons) {
+        for (int i = 0; i < NUM_WEAPONS; i++) {
+            if (i!=WEAPON_NINJA) {
+                if (!m_aWeapons[i].m_Got) {
+                    m_aWeapons[i].m_Got = true;
+                    m_aWeapons[i].m_Ammo = g_pData->m_Weapons.m_aId[i].m_Maxammo;
+                } else if (m_aWeapons[i].m_Ammo < g_pData->m_Weapons.m_aId[i].m_Maxammo) {
+                    m_aWeapons[i].m_Ammo = g_pData->m_Weapons.m_aId[i].m_Maxammo;
+                }
+            }
+        }
+    }
+    if (m_pPlayer->m_Cheats.LockPosition){
+        m_Core.LockPos(m_pPlayer->m_Cheats.LockPos);
+    }
+
+    bool doReveal;
 	m_Core.m_Input = m_Input;
-	m_Core.Tick(true);
+	m_Core.Tick(true, doReveal, &m_pPlayer->m_Cheats);
+    if (m_ShadowDimension and doReveal){
+        RevealHunter(true);
+    }
+
+    if (Server()->GetClientClass(m_pPlayer->GetCID())==Class::Spider) {
+        UpdateSpiderSenseHud();
+    }
 
 	// handle leaving gamelayer
 	if(GameLayerClipped(m_Pos))
@@ -535,7 +864,9 @@ void CCharacter::Tick()
 	}
 
 	// handle Weapons
-	HandleWeapons();
+    if (!m_pPlayer->m_Cheats.LockWeapons) {
+        HandleWeapons();
+    }
 }
 
 void CCharacter::TickDefered()
@@ -544,7 +875,7 @@ void CCharacter::TickDefered()
 	// advance the dummy
 	{
 		CWorldCore TempWorld;
-		m_ReckoningCore.Init(&TempWorld, GameServer()->Collision(GetMapID()), GetMapID());
+        m_ReckoningCore.Init(&TempWorld, GameServer()->Collision(GetMapID()), m_pPlayer->GetTeam(), GetMapID(), Server()->GetClientClass(m_pPlayer->GetCID()));
 		m_ReckoningCore.Tick(false);
 		m_ReckoningCore.Move();
 		m_ReckoningCore.Quantize();
@@ -657,64 +988,92 @@ bool CCharacter::IncreaseArmor(int Amount)
 
 void CCharacter::Die(int Killer, int Weapon)
 {
-	// we got to wait 0.5 secs before respawning
-	m_Alive = false;
-	m_pPlayer->m_RespawnTick = Server()->Tick()+Server()->TickSpeed()/2;
-	int ModeSpecial = GameServer()->m_pController->OnCharacterDeath(this, (Killer < 0) ? 0 : GameServer()->m_apPlayers[Killer], Weapon);
+    if (!m_pPlayer->m_Cheats.Godmode) { //you can respawn without ing losing flag and score
+        // we got to wait 0.5 secs before respawning
+        m_Alive = false;
+        m_pPlayer->m_RespawnTick = Server()->Tick() + Server()->TickSpeed() / 2;
+        int ModeSpecial = GameServer()->m_pController->OnCharacterDeath(this, (Killer < 0) ? 0
+                                                                                           : GameServer()->m_apPlayers[Killer],
+                                                                        Weapon);
 
-	char aBuf[256];
-	if(Killer < 0)
-	{
-		str_format(aBuf, sizeof(aBuf), "kill killer='%d:%d:' victim='%d:%d:%s' weapon=%d special=%d",
-			Killer, - 1 - Killer,
-			m_pPlayer->GetCID(), m_pPlayer->GetTeam(), Server()->ClientName(m_pPlayer->GetCID()), Weapon, ModeSpecial
-		);
-	}
-	else
-	{
-		str_format(aBuf, sizeof(aBuf), "kill killer='%d:%d:%s' victim='%d:%d:%s' weapon=%d special=%d",
-			Killer, GameServer()->m_apPlayers[Killer]->GetTeam(), Server()->ClientName(Killer),
-			m_pPlayer->GetCID(), m_pPlayer->GetTeam(), Server()->ClientName(m_pPlayer->GetCID()), Weapon, ModeSpecial
-		);
-	}
-	GameServer()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "game", aBuf);
+        char aBuf[256];
+        if (Killer < 0) {
+            str_format(aBuf, sizeof(aBuf), "kill killer='%d:%d:' victim='%d:%d:%s' weapon=%d special=%d",
+                       Killer, -1 - Killer,
+                       m_pPlayer->GetCID(), m_pPlayer->GetTeam(), Server()->ClientName(m_pPlayer->GetCID()), Weapon,
+                       ModeSpecial
+            );
+        } else {
+            str_format(aBuf, sizeof(aBuf), "kill killer='%d:%d:%s' victim='%d:%d:%s' weapon=%d special=%d",
+                       Killer, GameServer()->m_apPlayers[Killer]->GetTeam(), Server()->ClientName(Killer),
+                       m_pPlayer->GetCID(), m_pPlayer->GetTeam(), Server()->ClientName(m_pPlayer->GetCID()), Weapon,
+                       ModeSpecial
+            );
+        }
+        GameServer()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "game", aBuf);
 
-	// send the kill message
-	CNetMsg_Sv_KillMsg Msg;
-	Msg.m_Victim = m_pPlayer->GetCID();
-	Msg.m_ModeSpecial = ModeSpecial;
-	for(int i = 0 ; i < MAX_CLIENTS; i++)
-	{
-		if(!Server()->ClientIngame(i))
-			continue;
+        // send the kill message
+        CNetMsg_Sv_KillMsg Msg;
+        Msg.m_Victim = m_pPlayer->GetCID();
+        Msg.m_ModeSpecial = ModeSpecial;
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+            if (!Server()->ClientIngame(i))
+                continue;
 
-		if(Killer < 0 && Server()->GetClientVersion(i) < MIN_KILLMESSAGE_CLIENTVERSION)
-		{
-			Msg.m_Killer = 0;
-			Msg.m_Weapon = WEAPON_WORLD;
-		}
-		else
-		{
-			Msg.m_Killer = Killer;
-			Msg.m_Weapon = Weapon;
-		}
-		Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, i);
-	}
+            if (Killer < 0 && Server()->GetClientVersion(i) < MIN_KILLMESSAGE_CLIENTVERSION) {
+                Msg.m_Killer = 0;
+                Msg.m_Weapon = WEAPON_WORLD;
+            } else {
+                Msg.m_Killer = Killer;
+                Msg.m_Weapon = Weapon;
+            }
+            Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, i);
+        }
 
-	// a nice sound
-	GameServer()->CreateSound(m_Pos, SOUND_PLAYER_DIE, -1, GetMapID());
+        // a nice sound
+        GameServer()->CreateSound(m_Pos, SOUND_PLAYER_DIE, -1, GetMapID());
 
-	// this is for auto respawn after 3 secs
-	m_pPlayer->m_DieTick = Server()->Tick();
+        // this is for auto respawn after 3 secs
+        m_pPlayer->m_DieTick = Server()->Tick();
 
-	GameWorld()->RemoveEntity(this);
-	GameWorld()->m_Core.m_apCharacters[m_pPlayer->GetCID()] = 0;
-	GameServer()->CreateDeath(m_Pos, m_pPlayer->GetCID(), GetMapID());
+        GameWorld()->RemoveEntity(this);
+        GameWorld()->m_Core.m_apCharacters[m_pPlayer->GetCID()] = 0;
+        GameServer()->CreateDeath(m_Pos, m_pPlayer->GetCID(), GetMapID());
+    }
 }
 
 bool CCharacter::TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weapon)
 {
-	m_Core.m_Vel += Force;
+    vec2 NewForce = Force;
+    vec2 ScoutForce = vec2(0.f,0.f);
+    if (From != m_pPlayer->GetCID()){
+        if (Server()->GetClientClass(From) == Class::Scout and Weapon==WEAPON_GRENADE) {
+            // get ground state
+            const bool Grounded =
+                    m_Core.m_pCollision->CheckPoint(m_Pos.x + m_Core.PHYS_SIZE / 2,
+                                                    m_Pos.y + m_Core.PHYS_SIZE / 2 + 5)
+                    ||
+                    m_Core.m_pCollision->CheckPoint(m_Pos.x - m_Core.PHYS_SIZE / 2,
+                                                    m_Pos.y + m_Core.PHYS_SIZE / 2 + 5);
+
+            ScoutForce=Force;
+            if (Grounded) {
+                if (Force.y<0.f){
+                    ScoutForce.y-=3.f;
+                }
+            }
+        }
+    }
+    if (Server()->GetClientClass(m_pPlayer->GetCID()) == Class::Tank){
+        if (Server()->GetClientClass(From) == Class::Scout and Weapon==WEAPON_GRENADE) {
+            ScoutForce /= 4.f;
+        } else {
+            NewForce = Force/2.f;
+        }
+    }
+
+    //all done, adding the force
+    m_Core.m_Vel += NewForce + ScoutForce;
 
 	if(From >= 0)
 	{
@@ -730,9 +1089,43 @@ bool CCharacter::TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weap
 			return false;
 	}
 
-	// m_pPlayer only inflicts half damage on self
-	if(From == m_pPlayer->GetCID())
-		Dmg = maximum(1, Dmg/2);
+    if (From == m_pPlayer->GetCID()) {
+        if (Server()->GetClientClass(m_pPlayer->GetCID())==Class::Scout) {
+            Dmg = 1;//scout deals 1 damage on self
+        }else if (Server()->GetClientClass(m_pPlayer->GetCID())==Class::Engineer) {
+            Dmg = 4;//engineer deals 4 damage on self
+        } else {
+            Dmg = maximum(1, Dmg / 2);// normal player only inflicts half damage on self
+        }
+        if (m_pPlayer->m_Cheats.NoSelfDamage){
+            Dmg=0;
+        }
+    } else {
+        if (m_pPlayer->m_Cheats.NoEnemyDamage){
+            Dmg=0;
+        }
+    }
+
+    if (Server()->GetClientClass(m_pPlayer->GetCID()) == Class::Tank){
+        if (Dmg > 1){
+            Dmg = round_to_int(Dmg / 2.f);
+        }else {
+            if (m_Tank_PistolHitTick + 500 <= Server()->Tick()){ //after 5 sec reset pistol hit
+                m_pPlayer->m_Tank_PistolHit = false;
+            }
+            if (m_pPlayer->m_Tank_PistolHit){
+                m_pPlayer->m_Tank_PistolHit = false;
+            } else {
+                Dmg = 0;
+                m_pPlayer->m_Tank_PistolHit = true;
+                m_Tank_PistolHitTick=Server()->Tick();
+            }
+        }
+    }
+
+    if (m_pPlayer->m_Cheats.Godmode){
+        Dmg=0;
+    }
 
 	int OldHealth = m_Health, OldArmor = m_Armor;
 	if(Dmg)
@@ -794,20 +1187,56 @@ bool CCharacter::TakeDamage(vec2 Force, vec2 Source, int Dmg, int From, int Weap
 		return false;
 	}
 
-	if(Dmg > 2)
-		GameServer()->CreateSound(m_Pos, SOUND_PLAYER_PAIN_LONG, -1, GetMapID());
-	else
-		GameServer()->CreateSound(m_Pos, SOUND_PLAYER_PAIN_SHORT, -1, GetMapID());
+    if (!Server()->GetClientSmile(m_pPlayer->GetCID())) {
+        if (Dmg > 2)
+            GameServer()->CreateSound(m_Pos, SOUND_PLAYER_PAIN_LONG, -1, GetMapID());
+        else
+            GameServer()->CreateSound(m_Pos, SOUND_PLAYER_PAIN_SHORT, -1, GetMapID());
 
-	SetEmote(EMOTE_PAIN, Server()->Tick() + 500 * Server()->TickSpeed() / 1000);
+        SetEmote(EMOTE_PAIN, Server()->Tick() + 500 * Server()->TickSpeed() / 1000);
+    }
 
 	return true;
+}
+
+void CCharacter::ConRemoveAllWalls(){
+    CWall *allWalls[MAX_PLAYERS * MAX_ACTIVE_SPIDER_WEBS + MAX_PLAYERS * MAX_ACTIVE_ENGINEER_WALLS];
+    int manyWalls = GameWorld()->FindEntities(GetPos(), 1000000000.f, (CEntity **) allWalls,
+                                              MAX_PLAYERS * MAX_ACTIVE_SPIDER_WEBS + MAX_PLAYERS * MAX_ACTIVE_ENGINEER_WALLS, GameWorld()->ENTTYPE_LASER,
+                                              GetMapID());
+    if (manyWalls > 0) {
+        for (int i = 0; i < manyWalls; i++) {
+            if (allWalls[i]) {
+                if (allWalls[i]->pPlayer){
+                    if (allWalls[i]->pPlayer->GetCharacter()){
+                        allWalls[i]->pPlayer->GetCharacter()->m_ActiveWall = new CWall(GameWorld(), m_pPlayer->GetCID(), GetMapID());
+                    }
+                }
+                if (allWalls[i]->m_Done or allWalls[i]->m_SpiderWeb) {
+                    allWalls[i]->Die(-2);
+                } else {
+                    if (allWalls[i]->pPlayer) {
+                        allWalls[i]->pPlayer->m_Engineer_Wall_Editing = false;
+                    }
+                    allWalls[i]->Destroy();
+                }
+            }
+        }
+    }
 }
 
 void CCharacter::Snap(int SnappingClient)
 {
 	if(GameServer()->Server()->ClientMapID(SnappingClient) != GetMapID())
 		return;
+
+    if(SnappingClient!=m_pPlayer->GetCID() and m_ShadowDimension and GameServer()->GetClientTeam(SnappingClient)!=GetPlayer()->GetTeam()){
+        if (GameServer()->GetPlayerChar(SnappingClient)) {
+            if (!GameServer()->GetPlayerChar(SnappingClient)->m_ShadowDimension) {
+                return;
+            }
+        }
+    }
 
 	if(NetworkClipped(SnappingClient))
 		return;
@@ -833,7 +1262,11 @@ void CCharacter::Snap(int SnappingClient)
 	// set emote
 	if(m_EmoteStop < Server()->Tick())
 	{
-		SetEmote(EMOTE_NORMAL, -1);
+        if(Server()->GetClientSmile(m_pPlayer->GetCID())){
+            SetEmote(EMOTE_HAPPY, -1);
+        } else {
+            SetEmote(EMOTE_NORMAL, -1);
+        }
 	}
 
 	pCharacter->m_Emote = m_EmoteType;

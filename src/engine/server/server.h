@@ -8,6 +8,7 @@
 #include <engine/server.h>
 #include <engine/shared/memheap.h>
 #include <vector>
+#include "game/player_classes.h"
 
 class CSnapIDPool
 {
@@ -134,6 +135,10 @@ public:
 		int m_Authed;
 		int m_AuthTries;
 
+        Class m_Class;
+
+        bool m_Smile;
+
 		int m_MapChunk;
 		bool m_NoRconNote;
 		bool m_Quitting;
@@ -238,6 +243,13 @@ public:
 	int ClientCountry(int ClientID) const;
 	bool ClientIngame(int ClientID) const;
 	int ClientMapID(int ClientID) const override;
+
+
+    virtual Class GetClientClass(int ClientID);
+    virtual void SetClientClass(int ClientID, Class who);
+
+    virtual bool GetClientSmile(int ClientID);
+    virtual void SetClientSmile(int ClientID, bool new_smile);
 
 	virtual int SendMsg(CMsgPacker *pMsg, int Flags, int ClientID);
 

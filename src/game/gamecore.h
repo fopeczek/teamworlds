@@ -8,9 +8,12 @@
 
 #include <math.h>
 #include "collision.h"
+#include "CheatList.h"
 #include <engine/console.h>
 #include <engine/shared/protocol.h>
 #include <generated/protocol.h>
+#include "player_classes.h"
+#include "engine/server.h"
 
 class CTuneParam
 {
@@ -146,13 +149,15 @@ public:
 class CCharacterCore
 {
 	CWorldCore *m_pWorld;
-	CCollision *m_pCollision;
-	int m_MapID;
 public:
-	int GetMapID() const {return m_MapID;}
+    CCollision *m_pCollision;
 	static const float PHYS_SIZE;
 	vec2 m_Pos;
 	vec2 m_Vel;
+
+    Class m_Class;
+
+    bool m_Reveal= false;
 
 	vec2 m_HookDragVel;
 
@@ -161,6 +166,9 @@ public:
 	int m_HookTick;
 	int m_HookState;
 	int m_HookedPlayer;
+
+    int m_MapID;
+    int m_Team;
 
 	int m_Jumped;
 
@@ -173,10 +181,12 @@ public:
 
 	int m_TriggeredEvents;
 
-	void Init(CWorldCore *pWorld, CCollision *pCollision, int MapID);
+    void Init(CWorldCore *pWorld, CCollision *pCollision, int Team, int MapID=IServer::MainMapID, Class player_Class=Class::None);
 	void Reset();
-	void Tick(bool UseInput);
+    void Tick(bool UseInput, bool &doReveal, AvailableCheats *pCheats=nullptr);
+    void Tick(bool UseInput){ bool non; Tick(UseInput, non);}
 	void Move();
+    void LockPos(vec2 Pos);
 
 	void AddDragVelocity();
 	void ResetDragVelocity();

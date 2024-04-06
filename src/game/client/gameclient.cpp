@@ -401,7 +401,7 @@ void CGameClient::OnInit()
 	m_pEditor->Init();
 	m_pMenus->RenderLoading(2);
 
-	OnReset();	
+	OnReset();
 
 	m_ServerMode = SERVERMODE_PURE;
 
@@ -555,12 +555,12 @@ void CGameClient::UpdatePositions()
 	}
 }
 
-void CGameClient::EvolveCharacter(CNetObj_Character *pCharacter, int Tick)
+void CGameClient::EvolveCharacter(CNetObj_Character *pCharacter, int Tick, int ClientID)
 {
 	CWorldCore TempWorld;
 	CCharacterCore TempCore;
 	mem_zero(&TempCore, sizeof(TempCore));
-	TempCore.Init(&TempWorld, Collision(), TempCore.GetMapID());
+	TempCore.Init(&TempWorld, Collision(), TempCore.m_Team, TempCore.m_MapID, m_aClients[m_LocalClientID].m_Class);
 	TempCore.Read(pCharacter);
 
 	while(pCharacter->m_Tick < Tick)
@@ -856,6 +856,7 @@ void CGameClient::OnMessage(int MsgId, CUnpacker *pUnpacker)
 		str_utf8_copy_num(m_aClients[pMsg->m_ClientID].m_aName, pMsg->m_pName, sizeof(m_aClients[pMsg->m_ClientID].m_aName), MAX_NAME_LENGTH);
 		str_utf8_copy_num(m_aClients[pMsg->m_ClientID].m_aClan, pMsg->m_pClan, sizeof(m_aClients[pMsg->m_ClientID].m_aClan), MAX_CLAN_LENGTH);
 		m_aClients[pMsg->m_ClientID].m_Country = pMsg->m_Country;
+        m_aClients[pMsg->m_ClientID].m_Class = GetClass(pMsg->m_ClassID);
 		for(int i = 0; i < NUM_SKINPARTS; i++)
 		{
 			str_utf8_copy_num(m_aClients[pMsg->m_ClientID].m_aaSkinPartNames[i], pMsg->m_apSkinPartNames[i], sizeof(m_aClients[pMsg->m_ClientID].m_aaSkinPartNames[i]), MAX_SKIN_LENGTH);
@@ -1314,10 +1315,10 @@ void CGameClient::OnNewSnapshot()
 						}
 
 						if(pCharInfo->m_Prev.m_Tick)
-							EvolveCharacter(&pCharInfo->m_Prev, EvolvePrevTick);
+							EvolveCharacter(&pCharInfo->m_Prev, EvolvePrevTick, Item.m_ID);
 						if(pCharInfo->m_Cur.m_Tick)
-							EvolveCharacter(&pCharInfo->m_Cur, EvolveCurTick);
-						
+							EvolveCharacter(&pCharInfo->m_Cur, EvolveCurTick, Item.m_ID);
+
 						m_aClients[Item.m_ID].m_Evolved = m_Snap.m_aCharacters[Item.m_ID].m_Cur;
 					}
 
@@ -1566,7 +1567,7 @@ void CGameClient::OnPredict()
 		if(!m_Snap.m_aCharacters[i].m_Active)
 			continue;
 
-		m_aClients[i].m_Predicted.Init(&World, Collision(), m_aClients[i].m_Predicted.GetMapID());
+		m_aClients[i].m_Predicted.Init(&World, Collision(), m_aClients[i].m_Team, m_aClients[i].m_Predicted.m_MapID, m_aClients[i].m_Class);
 		World.m_apCharacters[i] = &m_aClients[i].m_Predicted;
 		m_aClients[i].m_Predicted.Read(&m_Snap.m_aCharacters[i].m_Cur);
 	}

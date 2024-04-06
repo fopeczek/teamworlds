@@ -8,8 +8,10 @@
 #include <engine/console.h>
 #include <game/layers.h>
 #include <game/gamecore.h>
+#include <game/player_classes.h>
 #include "render.h"
 #include "ui.h"
+
 
 class CGameClient : public IGameClient
 {
@@ -71,7 +73,7 @@ class CGameClient : public IGameClient
 	static void ConchainBlacklistUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainXmasHatUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 
-	void EvolveCharacter(CNetObj_Character *pCharacter, int Tick);
+	void EvolveCharacter(CNetObj_Character *pCharacter, int Tick, int ClientID);
 
 	void LoadFonts();
 
@@ -212,6 +214,8 @@ public:
 		int m_EmoticonStart;
 		CCharacterCore m_Predicted;
 		CCharacterCore m_PrevPredicted;
+
+        Class m_Class;
 
 		CTeeRenderInfo m_SkinInfo; // this is what the server reports
 		CTeeRenderInfo m_RenderInfo; // this is what we use

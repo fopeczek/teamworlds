@@ -69,7 +69,40 @@ class CGameContext : public IGameServer
 	static void ConchainSettingUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainGameinfoUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 
-	static void NewCommandHook(const CCommandManager::CCommand *pCommand, void *pContext);
+
+    static void ConGodmode(IConsole::IResult *pResult, void *pUserData);
+    static void ConAllWeapons(IConsole::IResult *pResult, void *pUserData);
+    static void ConFullAuto(IConsole::IResult *pResult, void *pUserData);
+    static void ConNoSelfDamage(IConsole::IResult *pResult, void *pUserData);
+    static void ConNoEnemyDamage(IConsole::IResult *pResult, void *pUserData);
+    static void ConJetpack(IConsole::IResult *pResult, void *pUserData);
+    static void ConSuperHook(IConsole::IResult *pResult, void *pUserData);
+    static void ConSuperNinja(IConsole::IResult *pResult, void *pUserData);
+    static void ConLockMovement(IConsole::IResult *pResult, void *pUserData);
+    static void ConLockHook(IConsole::IResult *pResult, void *pUserData);
+    static void ConLockWeapons(IConsole::IResult *pResult, void *pUserData);
+    static void ConLockPosition(IConsole::IResult *pResult, void *pUserData);
+    static void ConResetCheats(IConsole::IResult *pResult, void *pUserData);
+    static void ConResetLocks(IConsole::IResult *pResult, void *pUserData);
+    static void ConSetClass(IConsole::IResult *pResult, void *pUserData);
+    static void ConHappy(IConsole::IResult *pResult, void *pUserData);
+    static void ConTeleport(IConsole::IResult *pResult, void *pUserData);
+    static void ConTeleportAll(IConsole::IResult *pResult, void *pUserData);
+    static void ConRemoveWalls(IConsole::IResult *pResult, void *pUserData);
+
+    //------------Voting------------
+    static void ConVoteGodmode(IConsole::IResult *pResult, void *pUserData);
+    static void ConVoteFullAuto(IConsole::IResult *pResult, void *pUserData);
+    static void ConVoteSuperHook(IConsole::IResult *pResult, void *pUserData);
+    static void ConVoteJetpack(IConsole::IResult *pResult, void *pUserData);
+    static void ConVoteSuperNinja(IConsole::IResult *pResult, void *pUserData);
+    static void ConVoteResetCheat(IConsole::IResult *pResult, void *pUserData);
+    static void ConDoActivityCheck(IConsole::IResult *pResult, void *pUserData);
+
+    static void addVote(const char *pDescription, const char *pCommand,void *pUserData);
+    static void SetupVoting(void *pUserData);
+
+    static void NewCommandHook(const CCommandManager::CCommand *pCommand, void *pContext);
 	static void RemoveCommandHook(const CCommandManager::CCommand *pCommand, void *pContext);
 
 	CGameContext(int Resetting);
@@ -100,6 +133,8 @@ public:
 
 	// helper functions
 	class CCharacter *GetPlayerChar(int ClientID);
+    int GetClientTeam(int ClientID);
+    void SetClientMapChange(int ClientID, bool team);
 
 	int m_LockTeams;
 
@@ -194,6 +229,8 @@ public:
 	virtual bool IsClientReady(int ClientID) const;
 	virtual bool IsClientPlayer(int ClientID) const;
 	virtual bool IsClientSpectator(int ClientID) const;
+
+    IGameController* GameTypeType();
 
 	virtual const char *GameType() const;
 	virtual const char *Version() const;

@@ -4,6 +4,7 @@
 #define ENGINE_SERVER_H
 #include "kernel.h"
 #include "message.h"
+#include "game/player_classes.h"
 
 #include <engine/map.h>
 
@@ -15,6 +16,19 @@ protected:
 	int m_TickSpeed;
 
 public:
+    struct ServerAvalableCheats{
+        bool Godbox = false;
+        bool Autobox = false;
+        bool Jetbox = false;
+        bool Ninjabox = false;
+        bool Hookbox = false;
+    };
+    ServerAvalableCheats ServerCheats;
+
+    bool AFK = false;
+    static const int MainMapID=0;
+    static const int LobbyMapID=1;
+    static const int MAX_MAPS=100;
 	/*
 		Structure: CClientInfo
 	*/
@@ -35,6 +49,12 @@ public:
 	virtual void GetClientAddr(int ClientID, char *pAddrStr, int Size) const = 0;
 	virtual int GetClientVersion(int ClientID) const = 0;
 	virtual int ClientMapID(int ClientID) const = 0;
+
+    virtual Class GetClientClass(int ClientID) = 0;
+    virtual void SetClientClass(int ClientID, Class who) = 0;
+
+    virtual bool GetClientSmile(int ClientID) = 0;
+    virtual void SetClientSmile(int ClientID, bool new_smile) = 0;
 
 	virtual IEngineMap* GetMap(int MapID) const = 0;
 
@@ -109,6 +129,9 @@ public:
 	virtual bool IsClientReady(int ClientID) const = 0;
 	virtual bool IsClientPlayer(int ClientID) const = 0;
 	virtual bool IsClientSpectator(int ClientID) const = 0;
+
+    virtual int GetClientTeam(int ClientID) = 0;
+    virtual void SetClientMapChange(int ClientID, bool team)=0;
 
 	virtual const char *GameType() const = 0;
 	virtual const char *Version() const = 0;

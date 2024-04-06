@@ -307,6 +307,22 @@ void CServer::SetClientScore(int ClientID, int Score)
 	m_aClients[ClientID].m_Score = Score;
 }
 
+void CServer::SetClientClass(int ClientID, Class who){
+    m_aClients[ClientID].m_Class=who;
+}
+
+Class CServer::GetClientClass(int ClientID){
+    return m_aClients[ClientID].m_Class;
+}
+
+bool CServer::GetClientSmile(int ClientID){
+    return m_aClients[ClientID].m_Smile;
+}
+
+void CServer::SetClientSmile(int ClientID, bool new_smile){
+    m_aClients[ClientID].m_Smile = new_smile;
+}
+
 void CServer::SetClientMap(int ClientID, int MapID)
 {
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS || MapID < 0 || MapID >= (int)m_vpMap.size())
@@ -693,6 +709,7 @@ int CServer::NewClientCallback(int ClientID, void *pUser)
 	pThis->m_aClients[ClientID].m_aName[0] = 0;
 	pThis->m_aClients[ClientID].m_aClan[0] = 0;
 	pThis->m_aClients[ClientID].m_Country = -1;
+    pThis->m_aClients[ClientID].m_Class = Class::None;
 	pThis->m_aClients[ClientID].m_Authed = AUTHED_NO;
 	pThis->m_aClients[ClientID].m_AuthTries = 0;
 	pThis->m_aClients[ClientID].m_pRconCmdToSend = 0;
@@ -726,6 +743,9 @@ int CServer::DelClientCallback(int ClientID, const char *pReason, void *pUser)
 	pThis->m_aClients[ClientID].m_aName[0] = 0;
 	pThis->m_aClients[ClientID].m_aClan[0] = 0;
 	pThis->m_aClients[ClientID].m_Country = -1;
+    pThis->m_aClients[ClientID].m_MapID = MAP_DEFAULT_ID;
+    pThis->m_aClients[ClientID].m_NextMapID = MAP_DEFAULT_ID;
+    pThis->m_aClients[ClientID].m_Class = Class::None;
 	pThis->m_aClients[ClientID].m_Authed = AUTHED_NO;
 	pThis->m_aClients[ClientID].m_AuthTries = 0;
 	pThis->m_aClients[ClientID].m_pRconCmdToSend = 0;
@@ -1177,6 +1197,7 @@ void CServer::GenerateServerInfo(CPacker *pPacker, int Token)
 				pPacker->AddString(ClientName(i), 0); // client name
 				pPacker->AddString(ClientClan(i), 0); // client clan
 				pPacker->AddInt(m_aClients[i].m_Country); // client country
+                pPacker->AddInt(GetClassID(m_aClients[i].m_Class)); // client class ID
 				pPacker->AddInt(m_aClients[i].m_Score); // client score
 				pPacker->AddInt(GameServer()->IsClientPlayer(i)?0:1); // flag spectator=1, bot=2 (player=0)
 			}
@@ -1299,7 +1320,7 @@ int CServer::LoadMap(const char *pMapName)
 	str_format(aBufMultiMap, sizeof(aBufMultiMap), "Loading Map with ID '%d' and name '%s'", MapID, pMapName);
 	Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "multimap", aBufMultiMap);
 
-	if(!m_vpMap[MapID]->Load(aBuf, Kernel(), Storage()))
+	if(!m_vpMap[MapID]->Load(aBuf, Storage()))
 		return 0;
 
 	// stop recording when we change map
@@ -1365,6 +1386,13 @@ int CServer::Run()
 		Free();
 		return -1;
 	}
+
+    // load map
+    if(!LoadMap(Config()->m_SvLobby))
+    {
+        dbg_msg("server", "failed to load map. mapname='%s'", Config()->m_SvLobby);
+        return -1;
+    }
 	m_vMapData[MAP_DEFAULT_ID].m_MapChunksPerRequest = Config()->m_SvMapDownloadSpeed;
 
 	// start server
@@ -1956,7 +1984,7 @@ int main(int argc, const char **argv)
 	// create the components
 	int FlagMask = CFGFLAG_SERVER|CFGFLAG_ECON;
 	IEngine *pEngine = CreateEngine("Teeworlds_Server");
-	//IEngineMap *pEngineMap = CreateEngineMap();
+	IEngineMap *pEngineMap = CreateEngineMap();
     IMapChecker *pMapChecker = CreateMapChecker();
 	IGameServer *pGameServer = CreateGameServer();
 	IConsole *pConsole = CreateConsole(CFGFLAG_SERVER|CFGFLAG_ECON);
@@ -1971,8 +1999,8 @@ int main(int argc, const char **argv)
 
 		RegisterFail = RegisterFail || !pKernel->RegisterInterface(pServer); // register as both
 		RegisterFail = RegisterFail || !pKernel->RegisterInterface(pEngine);
-		//RegisterFail = RegisterFail || !pKernel->RegisterInterface(static_cast<IEngineMap*>(pEngineMap)); // register as both
-		//RegisterFail = RegisterFail || !pKernel->RegisterInterface(static_cast<IMap*>(pEngineMap));
+//		RegisterFail = RegisterFail || !pKernel->RegisterInterface(static_cast<IEngineMap*>(pEngineMap)); // register as both
+//		RegisterFail = RegisterFail || !pKernel->RegisterInterface(static_cast<IMap*>(pEngineMap));
         RegisterFail = RegisterFail || !pKernel->RegisterInterface(pMapChecker);
 		RegisterFail = RegisterFail || !pKernel->RegisterInterface(pGameServer);
 		RegisterFail = RegisterFail || !pKernel->RegisterInterface(pConsole);

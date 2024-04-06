@@ -4,6 +4,7 @@
 #define GAME_SERVER_GAMEWORLD_H
 
 #include <game/gamecore.h>
+#include "game/server/entities/projectile.h"
 
 class CEntity;
 class CCharacter;
@@ -100,6 +101,7 @@ public:
 			Returns a pointer to the closest hit or NULL of there is no intersection.
 	*/
 	class CCharacter *IntersectCharacter(vec2 Pos0, vec2 Pos1, float Radius, vec2 &NewPos, int MapID, class CEntity *pNotThis = 0);
+    bool IntersectBullet(vec2 Pos0, vec2 Pos1, float Radius, vec2& NewPos, CProjectile *Bullet);
 
 	/*
 		Function: insert_entity

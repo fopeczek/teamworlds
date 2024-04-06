@@ -28,7 +28,7 @@ public:
 		m_DataFile.Close();
 	}
 
-	virtual bool Load(const char *pMapName, IKernel *pKernel, IStorage *pStorage);
+	virtual bool Load(const char *pMapName, IStorage *pStorage);
 
 	virtual bool IsLoaded()
 	{

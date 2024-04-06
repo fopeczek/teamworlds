@@ -3,12 +3,8 @@
 #include <engine/kernel.h>
 
 
-bool CMap::Load(const char *pMapName, IKernel *pKernel, IStorage *pStorage)
+bool CMap::Load(const char *pMapName, IStorage *pStorage)
 	{
-		if(!pKernel)
-			return false;
-		if(!pStorage)
-			pStorage = pKernel->RequestInterface<IStorage>();
 		if(!pStorage)
 			return false;
 		if(!m_DataFile.Open(pStorage, pMapName, IStorage::TYPE_ALL))
